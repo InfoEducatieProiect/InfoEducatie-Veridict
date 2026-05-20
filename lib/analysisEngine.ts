@@ -533,12 +533,17 @@ export function computeFullScore(
     /** Când sunt setate, înlocuiesc similaritatea din cazuri (cosinus maxim / peer-uri ≥50%). */
     engineSimilarityPct?: number
     enginePeerMatches?: { name: string; similarity: number }[]
+    /** Live hybrid AI score (XLM-RoBERTa + burstiness + phrasal signatures). */
+    hybridAiScore?: number
   }
 ): ComputedStudentScore {
   const myShingles = generateShingles(text)
   const currentVec = computeStylometricVector(text)
   const historicVec = resolveHistoricProfile(studentName, options?.dbBaseline)
-  const aiScore = estimateAiScore(text, currentVec)
+  const aiScore =
+    options?.hybridAiScore != null && Number.isFinite(options.hybridAiScore)
+      ? Math.max(0, Math.min(99.4, Math.round(options.hybridAiScore * 10) / 10))
+      : estimateAiScore(text, currentVec)
   const manhattanDev = calculateManhattanDeviation(currentVec, historicVec)
   const stilometric: StudentScore["stilometric"] =
     manhattanDev > 40 ? "Abatere Stilistică" : "Stil Consistent"

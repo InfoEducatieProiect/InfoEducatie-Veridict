@@ -283,6 +283,24 @@ export async function getSubmissionsForAssignment(
   }))
 }
 
+/** Submissions turned in with non-empty essay text (live analysis input). */
+export function filterSubmittedWithText(rows: Submission[]): Submission[] {
+  return rows.filter(
+    (s) =>
+      s.submitted_at != null &&
+      typeof s.text === "string" &&
+      s.text.trim().length > 0,
+  )
+}
+
+export async function getSubmittedSubmissionsForAssignment(
+  assignmentId: string,
+  supabaseClient?: SupabaseClient,
+): Promise<Submission[]> {
+  const all = await getSubmissionsForAssignment(assignmentId, supabaseClient)
+  return filterSubmittedWithText(all)
+}
+
 // Check if student has submitted an assignment
 export async function hasStudentSubmitted(studentId: string, assignmentId: string): Promise<boolean> {
   const supabase = createClient()

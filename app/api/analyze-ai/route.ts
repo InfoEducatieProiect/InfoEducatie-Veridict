@@ -5,8 +5,10 @@ import { persistAnalysisReport } from "@/lib/analysis-report-persist"
 import { getSubmittedSubmissionsForAssignment } from "@/lib/supabase/queries"
 
 /**
- * @deprecated Prefer POST /api/analyze-ai (hybrid XLM-RoBERTa pipeline).
- * Delegates to the same persist path with submitted-essay filtering.
+ * Hybrid AI analysis — Phase 2 executor (scripts/ai_detector.py):
+ * XLM-RoBERTa + continuous burstiness structural layer, RO narrative verb shield,
+ * EN marker floor compensator, weighted fusion (90/10 when markers or high neural).
+ * Overwrites analysis_scores.ai_score and submissions.ai_score on each run.
  */
 export async function POST(request: Request) {
   try {
@@ -61,15 +63,22 @@ export async function POST(request: Request) {
 
     if (submissions.length === 0) {
       return NextResponse.json(
-        { error: "No submissions for this assignment" },
+        {
+          error:
+            "No submitted essays with text for this assignment (submitted_at required)",
+        },
         { status: 400 },
       )
     }
 
-    const report = await persistAnalysisReport(supabase, assignmentId, submissions)
+    const report = await persistAnalysisReport(
+      supabase,
+      assignmentId,
+      submissions,
+    )
     return NextResponse.json({ report })
   } catch (e) {
-    console.error("[api/analyze]", e)
+    console.error("[api/analyze-ai]", e)
     const message = e instanceof Error ? e.message : "Analysis failed"
     return NextResponse.json({ error: message }, { status: 500 })
   }
