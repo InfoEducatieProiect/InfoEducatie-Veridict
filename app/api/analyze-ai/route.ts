@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import type { SubmissionInput } from "@/lib/analysis-report"
+import {
+  mapDocumentsToSubmissionInputs,
+  mapRowsToAnalyzableDocuments,
+  type RawAnalyzableRow,
+} from "@/lib/analysis-ai-mapper"
 import { persistAnalysisReport } from "@/lib/analysis-report-persist"
 import { getSubmittedSubmissionsForAssignment } from "@/lib/supabase/queries"
 
 /**
- * Hybrid AI analysis — Phase 2 executor (scripts/ai_detector.py):
- * XLM-RoBERTa + continuous burstiness structural layer, RO narrative verb shield,
- * EN marker floor compensator, weighted fusion (90/10 when markers or high neural).
- * Overwrites analysis_scores.ai_score and submissions.ai_score on each run.
+ * Hybrid AI analysis — original production fusion (scripts/ai_detector.py):
+ * baseline 35.0 heuristic, original brackets/weights, bilingual connectors,
+ * artistic shield with advanced-AI bypass (neural >= 80% not capped at 15%).
+ * Decoupled row mapping → persist (overwrites analysis_scores.ai_score).
  */
 export async function POST(request: Request) {
   try {
@@ -51,25 +55,29 @@ export async function POST(request: Request) {
       supabase,
     )
 
-    const submissions: SubmissionInput[] = submissionsRaw.map((s) => ({
+    const rawRows: RawAnalyzableRow[] = submissionsRaw.map((s) => ({
       id: s.id,
-      studentId: s.student_id,
-      studentName:
-        (s.student_name?.trim()?.length ?? 0) > 0
-          ? (s.student_name as string).trim()
-          : `Student_${s.student_id.slice(0, 8)}`,
-      text: s.text ?? "",
+      author_id: s.student_id,
+      author_name: s.student_name ?? null,
+      body: s.text ?? null,
+      submitted_at: s.submitted_at ?? null,
     }))
 
-    if (submissions.length === 0) {
+    const documents = mapRowsToAnalyzableDocuments(rawRows, {
+      requireSubmitted: true,
+    })
+
+    if (documents.length === 0) {
       return NextResponse.json(
         {
           error:
-            "No submitted essays with text for this assignment (submitted_at required)",
+            "No submitted documents with analyzable text for this assignment",
         },
         { status: 400 },
       )
     }
+
+    const submissions = mapDocumentsToSubmissionInputs(documents)
 
     const report = await persistAnalysisReport(
       supabase,

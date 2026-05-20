@@ -1,6 +1,5 @@
 /**
- * TypeScript mirror of scripts/ai_detector.py — Phase 2 finetuned fusion.
- * Used when the Python/RoBERTa subprocess is unavailable (degraded mode).
+ * TypeScript mirror of scripts/ai_detector.py — dynamic confidence gate fusion.
  */
 
 const AMPRENTE_RO = [
@@ -19,16 +18,10 @@ const AMPRENTE_RO = [
   "reprezinta un",
   "mediul inconjurator",
   "o stare de",
-  "evidentiat perfect",
-  "legatura organica",
-  "universul conservator",
-  "maestrul descrierilor",
-  "un martor tacut",
-  "un farmec special",
+  "un aspect important",
   "punand accent pe",
   "fara indoiala",
-  "comorile lumii",
-  "peisaje impresionante",
+  "un rol crucial",
 ]
 
 const AMPRENTE_EN = [
@@ -43,13 +36,11 @@ const AMPRENTE_EN = [
   "peace of mind",
   "plays a crucial role",
   "in conclusion",
-  "valuable treasures",
-  "create beautiful landscapes",
-  "source of life",
+  "essential for",
+  "furthermore",
+  "moreover",
+  "create beautiful",
 ]
-
-const PATTERN_NARATIV =
-  /\b(se opri|erau|ramase|gandi|avu|porni|simtea|zburau|adormise|purtat|devenise)\b/gi
 
 const DIACRITIC_REPLACEMENTS: [string, string][] = [
   ["ă", "a"],
@@ -67,8 +58,25 @@ export interface HybridAiResult {
   scor_structura?: number
   densitate_amprente?: number
   limba_detectata?: string
-  este_proza_romaneasca?: boolean
+  greutate_roberta?: number
   source: "python" | "typescript_fallback"
+}
+
+/** Mirrors Python `_detecteaza_limba_heuristica` for fallback parity. */
+export function detecteazaLimba(text: string): "ro" | "en" {
+  const lower = text.toLowerCase()
+  const enHits = (
+    lower.match(
+      /\b(the|and|is|are|was|were|in|on|that|this|with|for|not|it|to|of)\b/g,
+    ) ?? []
+  ).length
+  const roHits = (
+    lower.match(
+      /\b(sau|si|este|sunt|care|pentru|din|la|un|o|nu|ca|dar|mai)\b/g,
+    ) ?? []
+  ).length
+  if (enHits > roHits * 1.15 && enHits >= 2) return "en"
+  return "ro"
 }
 
 export function calculeazaBurstinessNativ(text: string): number {
@@ -84,12 +92,10 @@ export function calculeazaBurstinessNativ(text: string): number {
   return Math.round(Math.sqrt(variance) * 100) / 100
 }
 
-export function detecteazaStilNarativUman(text: string): boolean {
-  const matches = text.toLowerCase().match(PATTERN_NARATIV)
-  return (matches?.length ?? 0) >= 3
-}
-
-export function analizeazaAmprenteAvansate(text: string, limba: string): number {
+export function analizeazaAmprenteBilingveAgnostice(
+  text: string,
+  limba: string,
+): number {
   let textLucru = text.toLowerCase()
   for (const [car, rep] of DIACRITIC_REPLACEMENTS) {
     textLucru = textLucru.split(car).join(rep)
@@ -98,88 +104,107 @@ export function analizeazaAmprenteAvansate(text: string, limba: string): number 
   return dictionar.filter((a) => textLucru.includes(a)).length
 }
 
+export function evalueazaTextProfesionalFuzionat(
+  text: string,
+  limba: string,
+): { burstiness: number; amprente: number; procent_ai: number } {
+  const burst = calculeazaBurstinessNativ(text)
+  const amprente = analizeazaAmprenteBilingveAgnostice(text, limba)
+  let scorFinal = 35.0
+  if (burst < 6.5) scorFinal += (6.5 - burst) * 6.5
+  else scorFinal -= (burst - 6.5) * 3.0
+  scorFinal += amprente * 9.5
+  let procentAi = Math.min(Math.round(scorFinal * 10) / 10, 99.4)
+  if (procentAi < 5.0) procentAi = 5.2
+  return { burstiness: burst, amprente, procent_ai: procentAi }
+}
+
 /**
- * Phase 2 finetuned fusion. When RoBERTa is unavailable, pass `probabilitateRoberta`
- * from an external source or use 50 for neutral structural blending.
+ * @param probabilitateRoberta — from RoBERTa when available; use ~50 only for pure structural fallback tests.
+ * @param limba — omit to auto-detect (required for bilingual TS fallback parity).
  */
-export function analizeazaTextCompletFinetuned(
+export function analizeazaTextComplet(
   text: string,
   probabilitateRoberta = 50.0,
-  limba = "ro",
+  limba?: string,
 ): HybridAiResult {
+  const limbaDetectata = limba ?? detecteazaLimba(text)
   const numarCuvinte = Math.max(text.split(/\s+/).filter(Boolean).length, 1)
+  const rezultatHeuristic = evalueazaTextProfesionalFuzionat(text, limbaDetectata)
+
   let probabilitate_roberta = Math.round(probabilitateRoberta * 10) / 10
-
-  const amprente = analizeazaAmprenteAvansate(text, limba)
-  if (limba === "en" && amprente >= 2 && probabilitate_roberta < 60.0) {
-    probabilitate_roberta = Math.max(probabilitate_roberta, 75.0)
-  }
-
-  const burst = calculeazaBurstinessNativ(text)
+  const burst = rezultatHeuristic.burstiness
+  const amprente = rezultatHeuristic.amprente
   const densitateAmprente = (amprente / numarCuvinte) * 100
 
-  let scorStructural = 90.0 - burst * 4.5
-  scorStructural = Math.max(Math.min(scorStructural, 95.0), 10.0)
-
-  if (amprente > 0) {
-    scorStructural = Math.min(scorStructural + amprente * 12.0, 99.0)
+  let scorStructura: number
+  if (burst > 0) {
+    scorStructura = Math.max(5, Math.min(95, 50 - (burst - 6.5) * 6))
+  } else {
+    scorStructura = 35
   }
 
-  const esteProzaRomaneasca = detecteazaStilNarativUman(text)
-  if (esteProzaRomaneasca && amprente === 0) {
-    probabilitate_roberta = Math.min(probabilitate_roberta, 15.0)
-    scorStructural = Math.min(scorStructural, 15.0)
+  const factorLimba = limbaDetectata === "en" ? 18 : 12
+  if (amprente > 0) {
+    scorStructura = Math.min(95, scorStructura + amprente * factorLimba)
   }
 
   let greutateRoberta: number
   let greutateHeuristic: number
-  if (densitateAmprente > 0.8 || probabilitate_roberta > 75.0) {
-    greutateRoberta = 0.9
-    greutateHeuristic = 0.1
+
+  if (probabilitate_roberta >= 75) {
+    greutateRoberta = Math.min(1, 0.85 + (probabilitate_roberta - 75) * 0.006)
+    greutateHeuristic = 1 - greutateRoberta
+  } else if (probabilitate_roberta <= 25) {
+    greutateRoberta = 0.7
+    greutateHeuristic = 0.3
+    if (burst > 8 && densitateAmprente < 1) {
+      probabilitate_roberta = Math.max(5.2, probabilitate_roberta * 0.4)
+    }
   } else {
-    greutateRoberta = 0.65
-    greutateHeuristic = 0.35
+    greutateRoberta = 0.45
+    greutateHeuristic = 0.55
   }
 
   let scorCombinat =
-    Math.round(
-      (probabilitate_roberta * greutateRoberta +
-        scorStructural * greutateHeuristic) *
-        10,
-    ) / 10
+    probabilitate_roberta * greutateRoberta +
+    scorStructura * greutateHeuristic
 
-  if (esteProzaRomaneasca && amprente === 0) {
-    scorCombinat = Math.min(scorCombinat, 8.5)
+  if (probabilitate_roberta > 80 && scorCombinat < 80) {
+    scorCombinat = Math.max(scorCombinat, probabilitate_roberta * 0.95)
   }
 
-  scorCombinat = Math.max(Math.min(scorCombinat, 99.4), 1.5)
+  scorCombinat = Math.round(Math.max(Math.min(scorCombinat, 99.4), 0) * 10) / 10
 
   return {
     scor_combinat_ai: scorCombinat,
     burstiness: burst,
     amprente,
     probabilitate_roberta,
-    scor_structura: Math.round(scorStructural * 10) / 10,
+    scor_structura: Math.round(scorStructura * 10) / 10,
     densitate_amprente: Math.round(densitateAmprente * 100) / 100,
-    limba_detectata: limba,
-    este_proza_romaneasca: esteProzaRomaneasca,
+    limba_detectata: limbaDetectata,
+    greutate_roberta: Math.round(greutateRoberta * 1000) / 1000,
     source: "typescript_fallback",
   }
 }
+
+export const analizeazaTextCompletAgnostic = analizeazaTextComplet
+export const analizeazaTextCompletFinetuned = analizeazaTextComplet
 
 export function mergePythonResult(raw: Record<string, unknown>): HybridAiResult {
   const scor = Number(raw.scor_combinat_ai)
   return {
     scor_combinat_ai: Number.isFinite(scor)
-      ? Math.max(Math.min(scor, 99.4), 1.5)
-      : 1.5,
+      ? Math.max(Math.min(scor, 99.4), 0)
+      : 0,
     burstiness: raw.burstiness as number | undefined,
     amprente: raw.amprente as number | undefined,
     probabilitate_roberta: raw.probabilitate_roberta as number | undefined,
     scor_structura: raw.scor_structura as number | undefined,
     densitate_amprente: raw.densitate_amprente as number | undefined,
     limba_detectata: raw.limba_detectata as string | undefined,
-    este_proza_romaneasca: raw.este_proza_romaneasca as boolean | undefined,
+    greutate_roberta: raw.greutate_roberta as number | undefined,
     source: "python",
   }
 }

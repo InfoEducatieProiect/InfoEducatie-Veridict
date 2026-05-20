@@ -3,10 +3,17 @@ import "server-only"
 import { spawn } from "child_process"
 import path from "path"
 import {
-  analizeazaTextCompletFinetuned,
+  analizeazaTextComplet,
+  detecteazaLimba,
   mergePythonResult,
   type HybridAiResult,
 } from "./hybrid-ai-detection"
+
+/** TS fallback: auto-detect language (never hard-default to RO). */
+function fallbackAnalyze(text: string): HybridAiResult {
+  const limba = detecteazaLimba(text)
+  return analizeazaTextComplet(text, 50, limba)
+}
 
 export interface TextAnalysisInput {
   id: string
@@ -71,9 +78,8 @@ function runPythonBatch(
           const id = String(row.id ?? "")
           if (!id) continue
           if (row.error) {
-            out[id] = analizeazaTextCompletFinetuned(
-              texts.find((t) => t.id === id)?.text ?? "",
-            )
+            const t = texts.find((x) => x.id === id)?.text ?? ""
+            out[id] = fallbackAnalyze(t)
             continue
           }
           out[id] = mergePythonResult(row)
@@ -107,8 +113,7 @@ export async function runHybridAiBatch(
     const pythonResults = await runPythonBatch(nonEmpty)
     const merged: Record<string, HybridAiResult> = {}
     for (const t of nonEmpty) {
-      merged[t.id] =
-        pythonResults[t.id] ?? analizeazaTextCompletFinetuned(t.text)
+      merged[t.id] = pythonResults[t.id] ?? fallbackAnalyze(t.text)
     }
     return merged
   } catch (err) {
@@ -118,7 +123,7 @@ export async function runHybridAiBatch(
     )
     const fallback: Record<string, HybridAiResult> = {}
     for (const t of nonEmpty) {
-      fallback[t.id] = analizeazaTextCompletFinetuned(t.text)
+      fallback[t.id] = fallbackAnalyze(t.text)
     }
     return fallback
   }
