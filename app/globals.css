@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Veridict Color System — Deep Navy / White / Electric Blue */
+  --background: #001F3F;
+  --foreground: #FFFFFF;
+
+  --card: #002a52;
+  --card-foreground: #FFFFFF;
+
+  --popover: #002a52;
+  --popover-foreground: #FFFFFF;
+
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #003366;
+  --secondary-foreground: #FFFFFF;
+
+  --muted: #0a2d50;
+  --muted-foreground: #94b8d8;
+
+  --accent: #3B82F6;
+  --accent-foreground: #FFFFFF;
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(59, 130, 246, 0.18);
+  --input: rgba(59, 130, 246, 0.12);
+  --ring: #3B82F6;
+
+  --radius: 0.75rem;
+
+  /* Node graph / mathematical grid overlay */
+  --grid-color: rgba(59, 130, 246, 0.06);
+  --node-color: rgba(59, 130, 246, 0.35);
+
+  /* Dashboard shell — off-white light theme */
+  --dash-bg:     #F1F5F9;
+  --dash-card:   #FFFFFF;
+  --dash-navy:   #001F3F;
+  --dash-accent: #3B82F6;
+  --dash-fg:     #0F172A;
+  --dash-muted:  #64748B;
+  --dash-border: #E2E8F0;
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Inter Fallback', sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
