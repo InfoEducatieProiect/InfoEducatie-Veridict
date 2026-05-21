@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Web plagiarism detection — Gemini Flash grounding + cosine similarity.
+Web plagiarism detection — Gemini Flash grounding + hybrid similarity (Cosine & Sentence Containment).
 stdin JSON: {"text": "..."}  → stdout JSON only (diagnostics on stderr).
 """
 from __future__ import annotations
@@ -40,6 +40,7 @@ _INVALID_HOST_FRAGMENTS = ("w3.org", "schema.org", "xmlns.com", "purl.org")
 _WRAP_HOST_FRAGMENTS = (
     "consent.google.com",
     "google.com/url",
+    "google.ro/url",
     "vertexaisearch.cloud.google.com",
     "grounding-api-redirect",
     "webcache.googleusercontent",
@@ -60,20 +61,51 @@ def _curata_si_tokenizeaza(text: str) -> list[str]:
 
 
 def calculeaza_cosinus_similitudine(text_a: str, text_b: str) -> float:
+    """
+    Calculează un scor hibrid de potrivire: îmbină Similitudinea Cosinus nativă
+    cu un test de conținere a propozițiilor (Sentence Containment).
+    Garantează scor maxim dacă textul suspect este inserat complet într-o pagină web lungă.
+    """
+    # --- 1. Algoritmul Clasic Cosinus ---
     cuvinte_a = _curata_si_tokenizeaza(text_a)
     cuvinte_b = _curata_si_tokenizeaza(text_b)
-    if not cuvinte_a or not cuvinte_b:
-        return 0.0
+    
+    scor_cosinus = 0.0
+    if cuvinte_a and cuvinte_b:
+        vector_a = Counter(cuvinte_a)
+        vector_b = Counter(cuvinte_b)
+        toate = set(vector_a.keys()).union(set(vector_b.keys()))
+        dot_product = sum(vector_a[c] * vector_b[c] for c in toate)
+        magnitudine_a = math.sqrt(sum(vector_a[c] ** 2 for c in vector_a))
+        magnitudine_b = math.sqrt(sum(vector_b[c] ** 2 for c in vector_b))
+        if magnitudine_a > 0 and magnitudine_b > 0:
+            scor_cosinus = dot_product / (magnitudine_a * magnitudine_b)
 
-    vector_a = Counter(cuvinte_a)
-    vector_b = Counter(cuvinte_b)
-    toate = set(vector_a.keys()).union(set(vector_b.keys()))
-    dot_product = sum(vector_a[c] * vector_b[c] for c in toate)
-    magnitudine_a = math.sqrt(sum(vector_a[c] ** 2 for c in vector_a))
-    magnitudine_b = math.sqrt(sum(vector_b[c] ** 2 for c in vector_b))
-    if magnitudine_a == 0 or magnitudine_b == 0:
-        return 0.0
-    return dot_product / (magnitudine_a * magnitudine_b)
+    # --- 2. Algoritmul de Conținere a Propozițiilor (Garanție text identic) ---
+    text_a_norm = text_a.lower().replace("\xa0", " ")
+    text_b_norm = text_b.lower().replace("\xa0", " ")
+    
+    # Împărțim textul suspect în fraze/propoziții semnificative (mai lungi de 15 caractere)
+    propozitii_a = [
+        p.strip() 
+        for p in re.split(r"[.\n!?\u2022]", text_a_norm) 
+        if len(p.strip()) > 15
+    ]
+    
+    scor_containment = 0.0
+    if propozitii_a:
+        gasite = 0
+        for prop in propozitii_a:
+            # Curățăm spațiile multiple pentru a evita eșecul la formatări web diferite
+            prop_curata = " ".join(prop.split())
+            text_b_curat = " ".join(text_b_norm.split())
+            if prop_curata in text_b_curat:
+                gasite += 1
+        scor_containment = gasite / len(propozitii_a)
+
+    # Scorul final este cel mai bun dintre cele două metode
+    # Dacă textul se află integral pe site (containment masiv), ignorăm diluarea cosinusului
+    return float(max(scor_cosinus, scor_containment))
 
 
 def _api_key() -> str:
@@ -117,7 +149,7 @@ def _curata_si_extrage_url_real(url: str) -> str:
         host = (parsed.netloc or "").lower()
         host_path = f"{host}{parsed.path or ''}".lower()
 
-        # 🔥 Elimină scurgerile de pagini de căutare Google
+        # 🔥 Elimină scurgerile de pagini de căutare Google gen /search
         if "google.com/search" in host_path or "google.ro/search" in host_path:
             _log(f"Blocked generic search result URL leakage: {raw[:60]}")
             return ""
@@ -145,10 +177,11 @@ def _curata_si_extrage_url_real(url: str) -> str:
             return urlunparse(
                 (parsed.scheme or "https", parsed.netloc, parsed.path or "/", "", "", "")
             )
-        return raw
     except Exception as exc:
         _log(f"URL unwrap error ({raw[:60]}): {exc}")
-        return raw
+    return raw
+
+
 def _extrage_urluri_din_text(text: str) -> list[str]:
     found: list[str] = []
     for raw in _URL_RE.findall(text or ""):
@@ -242,7 +275,6 @@ def _extrage_din_raspuns_complet(raspuns: Any) -> list[str]:
             if part_text:
                 for u in _extrage_urluri_din_text(part_text):
                     _append_url(linkuri, u)
-            # Some SDK versions attach grounding inline on parts
             part_gm = getattr(part, "grounding_metadata", None)
             if part_gm is not None:
                 _log(f"candidate[{ci}] part[{pi}] inline grounding_metadata")
@@ -516,18 +548,28 @@ def _configure_utf8_streams() -> None:
 def main() -> None:
     _configure_utf8_streams()
 
-    # Production path: Node spawns with --stdin and writes JSON payload
     if len(sys.argv) > 1 and sys.argv[1] not in ("--stdin", "-"):
         text_elev = sys.argv[1]
         _log(f"CLI arg mode; text len={len(text_elev)}")
     else:
         text_elev = _citeste_text_din_stdin()
 
-    if not text_elev.strip():
-        json.dump({"error": "empty_text"}, sys.stdout, ensure_ascii=False)
-        sys.exit(1)
+    # Curățăm caracterele invizibile din textul primit înainte de validare
+    text_verificabil = re.sub(r"[\s\xa0\u200b\u200c\u200d]+", " ", text_elev).strip()
 
-    rezultat = ruleaza_verificare_plagiat_globala(text_elev)
+    if not text_verificabil or len(text_verificabil) < 5:
+        _log("Eroare block: Textul furnizat este gol sau prea scurt.")
+        # Returnăm o structură JSON validă ca să nu crape interfața grafică
+        json.dump({
+            "verdict": "Textul transmis lipsește sau conține doar spații.",
+            "scor_maxim": 0.0,
+            "sursa_principala": None,
+            "plagiarism_urls": [],
+            "grounding_ok": False
+        }, sys.stdout, ensure_ascii=False)
+        sys.exit(0)
+
+    rezultat = ruleaza_verificare_plagiat_globala(text_verificabil)
     json.dump(rezultat, sys.stdout, ensure_ascii=False)
 
 
