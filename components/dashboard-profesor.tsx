@@ -831,7 +831,13 @@ function AssignmentDetail({
   analysisReports: Record<string, AnalysisReport>
   setAnalysisReports: React.Dispatch<React.SetStateAction<Record<string, AnalysisReport>>>
   onBack: () => void
-  onOpenForensic: (studentName: string, score: StudentScore, assignmentId: string, submissionTexts: Record<string, string>) => void
+  onOpenForensic: (
+    studentName: string,
+    score: StudentScore,
+    assignmentId: string,
+    submissionId: string,
+    submissionTexts: Record<string, string>,
+  ) => void
   showReport: boolean
   setShowReport: (v: boolean | ((prev: boolean) => boolean)) => void
 }) {
@@ -1151,7 +1157,7 @@ function AssignmentDetail({
                               <Eye size={11} aria-hidden="true" />Citeste
                             </button>
                             {hasReport && showReport && rScore && (
-                              <button onClick={() => onOpenForensic(s.studentName, rScore, assignment.id, submissionTexts)}
+                              <button onClick={() => onOpenForensic(s.studentName, rScore, assignment.id, s.id, submissionTexts)}
                                 className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                                 style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(0,31,63,0.06)" }}
                                 aria-label={`Mai multe detalii pentru ${s.studentName}`}>
@@ -1517,6 +1523,7 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     studentName: string
     score: StudentScore
     assignmentId: string
+    submissionId: string
     submissionTexts: Record<string, string>
   } | null>(null)
 
@@ -1590,10 +1597,55 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     setView("detail")
   }
 
-  const handleOpenForensic = (studentName: string, score: StudentScore, assignmentId: string, submissionTexts: Record<string, string>) => {
-    setForensicData({ studentName, score, assignmentId, submissionTexts })
-    // Stay on "detail" view — the detail view uses CSS display toggle to show forensic
+  const handleOpenForensic = (
+    studentName: string,
+    score: StudentScore,
+    assignmentId: string,
+    submissionId: string,
+    submissionTexts: Record<string, string>,
+  ) => {
+    setForensicData({ studentName, score, assignmentId, submissionId, submissionTexts })
     setView("detail")
+  }
+
+  const handlePlagiarismReport = (
+    assignmentId: string,
+    studentName: string,
+    report: {
+      verdict: string
+      scor_maxim: number
+      sursa_principala: string | null
+      plagiarism_urls: { url: string; scor: number }[]
+    },
+  ) => {
+    setAnalysisReports((prev) => {
+      const current = prev[assignmentId]
+      if (!current?.scores[studentName]) return prev
+      return {
+        ...prev,
+        [assignmentId]: {
+          ...current,
+          scores: {
+            ...current.scores,
+            [studentName]: {
+              ...current.scores[studentName],
+              plagiarismWeb: report,
+            },
+          },
+        },
+      }
+    })
+    setForensicData((fd) =>
+      fd && fd.studentName === studentName && fd.assignmentId === assignmentId
+        ? {
+            ...fd,
+            score: {
+              ...fd.score,
+              plagiarismWeb: report,
+            },
+          }
+        : fd,
+    )
   }
 
   const handleSave = async (data: { title: string; requirement: string; details: string; deadline: string; className: SchoolClass }) => {
@@ -1688,6 +1740,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                         : "Stil Consistent",
                   }}
                   onBack={handleBackFromForensic}
+                  assignmentId={forensicData.assignmentId}
+                  submissionId={forensicData.submissionId}
                   submissionTexts={forensicData.submissionTexts}
                   allScores={Object.fromEntries(
                     Object.entries(analysisReports[forensicData.assignmentId]?.scores ?? {}).map(
@@ -1696,6 +1750,24 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                   )}
                   integrityGraphEdges={analysisReports[forensicData.assignmentId]?.graphEdges}
                   integrityGraphNodes={analysisReports[forensicData.assignmentId]?.graphNodes}
+                  onPlagiarismReport={(report) =>
+                    handlePlagiarismReport(
+                      forensicData.assignmentId,
+                      forensicData.studentName,
+                      {
+                        verdict: report.verdict,
+                        scor_maxim: report.scor_maxim,
+                        sursa_principala: report.sursa_principala,
+                        plagiarism_urls: report.top_surse.map((s) => ({
+                          url: s.url,
+                          scor:
+                            s.scor > 1
+                              ? Math.round(s.scor)
+                              : Math.round(s.scor * 1000) / 10,
+                        })),
+                      },
+                    )
+                  }
                 />
               )}
             </motion.div>

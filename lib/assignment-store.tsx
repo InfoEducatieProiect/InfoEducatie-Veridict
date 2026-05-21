@@ -43,6 +43,12 @@ export interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
+  plagiarismWeb?: {
+    verdict: string
+    scor_maxim: number
+    sursa_principala: string | null
+    plagiarism_urls: { url: string; scor: number }[]
+  } | null
 }
 
 export interface StudentSubmission {

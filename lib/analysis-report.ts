@@ -5,6 +5,10 @@
 
 import type { HistoricBaseline } from "./assignment-store"
 import {
+  parsePlagiarismWebReport,
+  type PlagiarismWebReport,
+} from "./plagiarism-web"
+import {
   calculateManhattanDeviation,
   computeStylometricVector,
   resolveHistoricProfile,
@@ -33,6 +37,8 @@ export interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
+  /** Cached global web plagiarism (analysis_scores.plagiarism_urls). */
+  plagiarismWeb?: PlagiarismWebReport | null
 }
 
 export interface AnalysisReport {
@@ -170,6 +176,7 @@ export async function loadAnalysisReportForAssignment(
       historicAdjectiveDensity: historicVec.adjectiveDensity,
       historicPunctuationUsage: historicVec.punctuationUsage,
       peerMatches,
+      plagiarismWeb: parsePlagiarismWebReport(row.plagiarism_urls ?? null),
     }
   }
 

@@ -98,6 +98,8 @@ export interface AnalysisScore {
   stilometric: number | null
   /** True when stylistic deviation is within acceptable bounds (typically deviation ≤ 40). */
   stilometric_consistent?: boolean | null
+  /** Global web plagiarism report (Gemini grounding + cosine). */
+  plagiarism_urls?: Record<string, unknown> | null
   ttr: number | null
   asl: number | null
   verbs: number | null
@@ -526,6 +528,47 @@ export async function getAnalysisScoresWithPeers(
     ...s,
     student_name: (s as { profiles?: { display_name?: string } }).profiles?.display_name,
   }))
+}
+
+/** Latest analysis_scores row for a submission (current assignment run). */
+export async function getAnalysisScoreForSubmission(
+  assignmentId: string,
+  submissionId: string,
+  supabaseClient?: SupabaseClient,
+): Promise<AnalysisScore | null> {
+  const supabase = sb(supabaseClient)
+  const run = await getLatestAnalysisRun(assignmentId, supabase)
+  if (!run) return null
+
+  const { data, error } = await supabase
+    .from("analysis_scores")
+    .select("*, profiles!analysis_scores_student_id_fkey(display_name)")
+    .eq("analysis_run_id", run.id)
+    .eq("submission_id", submissionId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+  return {
+    ...data,
+    student_name: (data as { profiles?: { display_name?: string } }).profiles
+      ?.display_name,
+  }
+}
+
+/** Persist global web plagiarism JSON on analysis_scores.plagiarism_urls. */
+export async function updateAnalysisScorePlagiarism(
+  analysisScoreId: string,
+  report: Record<string, unknown>,
+  supabaseClient?: SupabaseClient,
+): Promise<void> {
+  const supabase = sb(supabaseClient)
+  const { error } = await supabase
+    .from("analysis_scores")
+    .update({ plagiarism_urls: report })
+    .eq("id", analysisScoreId)
+
+  if (error) throw error
 }
 
 // Get peer matches for an analysis score
