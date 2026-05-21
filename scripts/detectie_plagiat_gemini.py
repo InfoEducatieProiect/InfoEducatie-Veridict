@@ -93,12 +93,22 @@ def _api_key() -> str:
 def _curata_si_extrage_url_real(url: str) -> str:
     """
     Unwrap Google proxy/consent/redirect frames; strip tracking query strings;
-    discard invalid namespaces (w3.org, etc.).
+    discard invalid namespaces (w3.org, etc.). Punctuation and encoding safe for Wikipedia.
     """
     if not url or not isinstance(url, str):
         return ""
 
-    raw = url.strip().rstrip(".,;)")
+    # Decodificăm din start entitățile URL (ex: %C4%83 devine ă) pentru a uniformiza textul
+    try:
+        url_decodat = unquote(url).strip()
+    except Exception:
+        url_decodat = url.strip()
+
+    # Curățăm semnele de punctuație, dar păstrăm parantezele dacă sunt echilibrate (ex: Wikipedia)
+    raw = url_decodat.rstrip(".,;")
+    while raw.endswith(")") and raw.count(")") > raw.count("("):
+        raw = raw[:-1].rstrip(".,;")
+
     if not raw.startswith(("http://", "https://")):
         return ""
 
@@ -106,6 +116,11 @@ def _curata_si_extrage_url_real(url: str) -> str:
         parsed = urlparse(raw)
         host = (parsed.netloc or "").lower()
         host_path = f"{host}{parsed.path or ''}".lower()
+
+        # 🔥 Elimină scurgerile de pagini de căutare Google
+        if "google.com/search" in host_path or "google.ro/search" in host_path:
+            _log(f"Blocked generic search result URL leakage: {raw[:60]}")
+            return ""
 
         for fragment in _INVALID_HOST_FRAGMENTS:
             if fragment in host_path:
@@ -125,11 +140,7 @@ def _curata_si_extrage_url_real(url: str) -> str:
                         _log(f"Unwrapped redirect ({key}) -> {nested[:90]}")
                         return nested
 
-        if host and "wikipedia.org" in host:
-            return urlunparse(
-                (parsed.scheme or "https", parsed.netloc, parsed.path.rstrip("/") or "/", "", "", "")
-            )
-
+        # Pentru Wikipedia și alte site-uri, returnăm URL-ul cu căile decodate nativ
         if parsed.netloc:
             return urlunparse(
                 (parsed.scheme or "https", parsed.netloc, parsed.path or "/", "", "", "")
@@ -138,8 +149,6 @@ def _curata_si_extrage_url_real(url: str) -> str:
     except Exception as exc:
         _log(f"URL unwrap error ({raw[:60]}): {exc}")
         return raw
-
-
 def _extrage_urluri_din_text(text: str) -> list[str]:
     found: list[str] = []
     for raw in _URL_RE.findall(text or ""):
