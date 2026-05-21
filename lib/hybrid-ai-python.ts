@@ -9,7 +9,6 @@ import {
   type HybridAiResult,
 } from "./hybrid-ai-detection"
 
-/** TS fallback: auto-detect language (never hard-default to RO). */
 function fallbackAnalyze(text: string): HybridAiResult {
   const limba = detecteazaLimba(text)
   return analizeazaTextComplet(text, 50, limba)
@@ -25,6 +24,27 @@ const PYTHON_BIN = process.env.PYTHON_PATH ?? "python"
 
 function scriptPath(): string {
   return path.join(process.cwd(), "scripts", "ai_detector.py")
+}
+
+function emptyResult(id: string): HybridAiResult {
+  return {
+    id,
+    scor_combinat_ai: 0,
+    probabilitate_roberta_bruta: 0,
+    probabilitate_roberta: 0,
+    burstiness: 0,
+    amprente: 0,
+    densitate_amprente: 0,
+    scor_structura: 0,
+    greutate_roberta: 0,
+    greutate_heuristic: 0,
+    limba_detectata: "ro",
+    limba_slaba_pentru_roberta: true,
+    scut_artistic_activ: false,
+    scut_enciclopedic_activ: false,
+    source: "typescript_fallback",
+    error: "empty_text",
+  }
 }
 
 function runPythonBatch(
@@ -66,24 +86,43 @@ function runPythonBatch(
       }
       try {
         const parsed = JSON.parse(stdout) as {
-          results?: Record<string, unknown>[]
+          results?: Array<Record<string, unknown>>
           error?: string
         }
         if (parsed.error) {
           reject(new Error(parsed.error))
           return
         }
+
         const out: Record<string, HybridAiResult> = {}
-        for (const row of parsed.results ?? []) {
+        const rows = Array.isArray(parsed.results) ? parsed.results : []
+
+        for (const row of rows) {
           const id = String(row.id ?? "")
           if (!id) continue
+
           if (row.error) {
-            const t = texts.find((x) => x.id === id)?.text ?? ""
-            out[id] = fallbackAnalyze(t)
+            const input = texts.find((x) => x.id === id)
+            if (input?.text.trim()) {
+              const fb = fallbackAnalyze(input.text)
+              out[id] = { ...fb, id, error: String(row.error) }
+            } else {
+              out[id] = emptyResult(id)
+            }
             continue
           }
-          out[id] = mergePythonResult(row)
+
+          out[id] = mergePythonResult({ ...row, id })
         }
+
+        for (const item of texts) {
+          if (!out[item.id]) {
+            out[item.id] = item.text.trim()
+              ? { ...fallbackAnalyze(item.text), id: item.id }
+              : emptyResult(item.id)
+          }
+        }
+
         resolve(out)
       } catch (e) {
         reject(
@@ -101,7 +140,7 @@ function runPythonBatch(
 
 /**
  * Batch hybrid AI scores keyed by submission id.
- * Falls back to TypeScript heuristics if Python/RoBERTa is unavailable.
+ * Falls back to TypeScript ensemble if Python/RoBERTa is unavailable.
  */
 export async function runHybridAiBatch(
   texts: TextAnalysisInput[],
@@ -113,17 +152,18 @@ export async function runHybridAiBatch(
     const pythonResults = await runPythonBatch(nonEmpty)
     const merged: Record<string, HybridAiResult> = {}
     for (const t of nonEmpty) {
-      merged[t.id] = pythonResults[t.id] ?? fallbackAnalyze(t.text)
+      merged[t.id] =
+        pythonResults[t.id] ?? { ...fallbackAnalyze(t.text), id: t.id }
     }
     return merged
   } catch (err) {
     console.warn(
-      "[hybrid-ai] Python/RoBERTa unavailable, using TS heuristic fallback:",
+      "[hybrid-ai] Python/RoBERTa unavailable, using TS ensemble fallback:",
       err instanceof Error ? err.message : err,
     )
     const fallback: Record<string, HybridAiResult> = {}
     for (const t of nonEmpty) {
-      fallback[t.id] = fallbackAnalyze(t.text)
+      fallback[t.id] = { ...fallbackAnalyze(t.text), id: t.id }
     }
     return fallback
   }

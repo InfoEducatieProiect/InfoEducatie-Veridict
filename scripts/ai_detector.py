@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Veridict hybrid AI detection — dynamic confidence gate fusion.
-Neural veto >=75%, human re-anchor <=25%, language-scaled phrase norms. Bilingual.
+Veridict hybrid AI detection — Decoupled Ensemble Matrix.
+RoBERTa (yaya36095/xlm-roberta-text-detector) + non-linear stylometrics.
+Parity: lib/hybrid-ai-detection.ts
 """
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -32,13 +34,14 @@ def _detecteaza_limba(text: str) -> str:
         return _detecteaza_limba_heuristica(text)
     try:
         lng = _langdetect(text)
-        return lng if lng in ("ro", "en") else "ro"
+        if lng == "en":
+            return "en"
+        return "ro"
     except Exception:
         return _detecteaza_limba_heuristica(text)
 
 
 def _detecteaza_limba_heuristica(text: str) -> str:
-    """Fallback when langdetect is unavailable — mirrors TS heuristic."""
     lower = text.lower()
     en_hits = len(
         re.findall(
@@ -116,22 +119,72 @@ def analizeaza_amprente_bilingve_agnostice(text: str, limba: str) -> int:
     return sum(1 for amprenta in dictionar_activ if amprenta in text_lucru)
 
 
-def evalueaza_text_profesional_fuzionat(text: str, limba: str) -> dict[str, Any]:
-    burst = calculeaza_burstiness_nativ(text)
-    amprente = analizeaza_amprente_bilingve_agnostice(text, limba)
+def _calculeaza_scor_structura(burst: float, amprente: int) -> float:
+    scor_structura = 35.0
+    scor_structura += min(45.0, math.log1p(amprente) * 18.0)
+    if burst < 3.5:
+        scor_structura += 20.0
+    elif burst > 7.5:
+        scor_structura -= 15.0
+    return max(0.0, min(99.4, round(scor_structura, 1)))
 
-    scor_final = 35.0
-    if burst < 6.5:
-        scor_final += (6.5 - burst) * 6.5
+
+def _ensemble_fusion(
+    probabilitate_roberta_bruta: float,
+    scor_structura: float,
+    burst: float,
+    amprente: int,
+    densitate_amprente: float,
+    numar_cuvinte: int,
+) -> tuple[float, float, float, float, float, bool, bool]:
+    prob = probabilitate_roberta_bruta
+    scut_artistic = False
+    scut_enciclopedic = False
+
+    if probabilitate_roberta_bruta < 75.0:
+        scut_artistic = burst > 7.0 and densitate_amprente < 0.5
+        scut_enciclopedic = (
+            burst >= 4.0
+            and densitate_amprente < 1.2
+            and numar_cuvinte > 100
+        )
+
+    if probabilitate_roberta_bruta >= 75.0:
+        scut_artistic = False
+        scut_enciclopedic = False
+        greutate_roberta = 0.80
+        greutate_heuristic = 0.20
+    elif probabilitate_roberta_bruta <= 20.0 and amprente <= 1:
+        greutate_roberta = 0.85
+        greutate_heuristic = 0.15
+        scor_structura = min(scor_structura, 25.0)
     else:
-        scor_final -= (burst - 6.5) * 3.0
-    scor_final += amprente * 9.5
+        greutate_roberta = 0.50
+        greutate_heuristic = 0.50
 
-    procent_ai = min(round(scor_final, 1), 99.4)
-    if procent_ai < 5.0:
-        procent_ai = 5.2
+    if probabilitate_roberta_bruta < 75.0 and (scut_artistic or scut_enciclopedic):
+        greutate_roberta = 0.20
+        greutate_heuristic = 0.85
+        prob = min(prob, 30.0)
 
-    return {"burstiness": burst, "amprente": amprente, "procent_ai": procent_ai}
+    scor_combinat = round(
+        (prob * greutate_roberta) + (scor_structura * greutate_heuristic),
+        1,
+    )
+    scor_combinat = max(0.0, min(99.4, scor_combinat))
+
+    if probabilitate_roberta_bruta >= 75.0:
+        scor_combinat = max(scor_combinat, probabilitate_roberta_bruta)
+
+    return (
+        scor_combinat,
+        round(prob, 1),
+        scor_structura,
+        greutate_roberta,
+        greutate_heuristic,
+        scut_artistic,
+        scut_enciclopedic,
+    )
 
 
 def _calibreaza_etichete(detector: Pipeline) -> None:
@@ -187,61 +240,65 @@ def analizeaza_cu_roberta(text: str) -> dict[str, Any]:
 
 def analizeaza_text_complet(text: str, include_heuristic: bool = True) -> dict[str, Any]:
     limba_detectata = _detecteaza_limba(text)
+    limba_iso = limba_detectata if limba_detectata in ("ro", "en") else "ro"
     rezultat_roberta = analizeaza_cu_roberta(text)
     numar_cuvinte = max(len(text.split()), 1)
 
+    probabilitate_roberta_bruta = rezultat_roberta["probabilitate_ai"]
+
     if not include_heuristic:
-        return {"scor_combinat_ai": rezultat_roberta["probabilitate_ai"]}
+        return {
+            "scor_combinat_ai": probabilitate_roberta_bruta,
+            "probabilitate_roberta_bruta": probabilitate_roberta_bruta,
+            "probabilitate_roberta": probabilitate_roberta_bruta,
+            "burstiness": 0.0,
+            "amprente": 0,
+            "densitate_amprente": 0.0,
+            "scor_structura": 0.0,
+            "greutate_roberta": 1.0,
+            "greutate_heuristic": 0.0,
+            "limba_detectata": limba_iso,
+            "limba_slaba_pentru_roberta": limba_detectata in _LIMBI_SLABE_ROBERTA,
+            "scut_artistic_activ": False,
+            "scut_enciclopedic_activ": False,
+        }
 
-    rezultat_heuristic = evalueaza_text_profesional_fuzionat(text, limba_detectata)
-    probabilitate_roberta = rezultat_roberta["probabilitate_ai"]
-    burst = rezultat_heuristic["burstiness"]
-    amprente = rezultat_heuristic["amprente"]
-    densitate_amprente = (amprente / numar_cuvinte) * 100
+    amprente = analizeaza_amprente_bilingve_agnostice(text, limba_iso)
+    burst = calculeaza_burstiness_nativ(text)
+    densitate_amprente = round((amprente / numar_cuvinte) * 100, 2)
 
-    # 1. Calibrare continuă a scorului de structură (fără IF-uri rigide)
-    if burst > 0:
-        scor_structura = max(5.0, min(95.0, 50.0 - (burst - 6.5) * 6.0))
-    else:
-        scor_structura = 35.0
-
-    factor_limba = 18.0 if limba_detectata == "en" else 12.0
-    if amprente > 0:
-        scor_structura = min(95.0, scor_structura + (amprente * factor_limba))
-
-    # 2. Dynamic Confidence Gate
-    if probabilitate_roberta >= 75.0:
-        greutate_roberta = min(1.0, 0.85 + (probabilitate_roberta - 75.0) * 0.006)
-        greutate_heuristic = 1.0 - greutate_roberta
-    elif probabilitate_roberta <= 25.0:
-        greutate_roberta = 0.70
-        greutate_heuristic = 0.30
-        if burst > 8.0 and densitate_amprente < 1.0:
-            probabilitate_roberta = max(5.2, probabilitate_roberta * 0.4)
-    else:
-        greutate_roberta = 0.45
-        greutate_heuristic = 0.55
-
-    scor_combinat = (
-        probabilitate_roberta * greutate_roberta
-        + scor_structura * greutate_heuristic
+    scor_structura = _calculeaza_scor_structura(burst, amprente)
+    (
+        scor_combinat,
+        probabilitate_roberta,
+        scor_structura,
+        greutate_roberta,
+        greutate_heuristic,
+        scut_artistic,
+        scut_enciclopedic,
+    ) = _ensemble_fusion(
+        probabilitate_roberta_bruta,
+        scor_structura,
+        burst,
+        amprente,
+        densitate_amprente,
+        numar_cuvinte,
     )
-
-    if probabilitate_roberta > 80.0 and scor_combinat < 80.0:
-        scor_combinat = max(scor_combinat, probabilitate_roberta * 0.95)
-
-    scor_combinat = max(min(round(scor_combinat, 1), 99.4), 0.0)
 
     return {
         "scor_combinat_ai": scor_combinat,
+        "probabilitate_roberta_bruta": probabilitate_roberta_bruta,
+        "probabilitate_roberta": probabilitate_roberta,
         "burstiness": burst,
         "amprente": amprente,
-        "probabilitate_roberta": probabilitate_roberta,
-        "scor_structura": round(scor_structura, 1),
-        "densitate_amprente": round(densitate_amprente, 2),
-        "limba_detectata": limba_detectata,
-        "eticheta_bruta": rezultat_roberta.get("eticheta_bruta"),
-        "confidenta_model": rezultat_roberta.get("confidenta_model"),
+        "densitate_amprente": densitate_amprente,
+        "scor_structura": scor_structura,
+        "greutate_roberta": greutate_roberta,
+        "greutate_heuristic": greutate_heuristic,
+        "limba_detectata": limba_iso,
+        "limba_slaba_pentru_roberta": limba_detectata in _LIMBI_SLABE_ROBERTA,
+        "scut_artistic_activ": scut_artistic,
+        "scut_enciclopedic_activ": scut_enciclopedic,
     }
 
 
@@ -270,14 +327,26 @@ def main() -> None:
         item_id = str(item.get("id", ""))
         text = str(item.get("text", "") or "")
         if not text.strip():
-            results.append({"id": item_id, "scor_combinat_ai": 0.0, "error": "empty_text"})
+            results.append(
+                {
+                    "id": item_id,
+                    "scor_combinat_ai": 0.0,
+                    "error": "empty_text",
+                }
+            )
             continue
         try:
             out = analizeaza_text_complet(text)
             out["id"] = item_id
             results.append(out)
         except Exception as exc:
-            results.append({"id": item_id, "scor_combinat_ai": 0.0, "error": str(exc)})
+            results.append(
+                {
+                    "id": item_id,
+                    "scor_combinat_ai": 0.0,
+                    "error": str(exc),
+                }
+            )
 
     json.dump({"results": results}, sys.stdout)
 

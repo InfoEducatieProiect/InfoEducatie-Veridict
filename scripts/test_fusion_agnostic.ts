@@ -1,5 +1,5 @@
 /**
- * Dynamic confidence gate regression checks (TS parity).
+ * Decoupled ensemble matrix regression checks (TS parity).
  * Run: npx tsx scripts/test_fusion_agnostic.ts
  */
 import { analizeazaTextComplet } from "../lib/hybrid-ai-detection"
@@ -32,8 +32,8 @@ assert(
   `Neural veto must breach 85%, got ${highNeural.scor_combinat_ai}`,
 )
 assert(
-  (highNeural.greutate_roberta ?? 0) >= 0.9,
-  `Neural weight >=0.9 at 95%, got ${highNeural.greutate_roberta}`,
+  (highNeural.greutate_roberta ?? 0) >= 0.8,
+  `Neural certainty weight >=0.8 at 95%, got ${highNeural.greutate_roberta}`,
 )
 
 const enMarkers = analizeazaTextComplet(
@@ -53,8 +53,8 @@ const burstB = analizeazaTextComplet(
   "ro",
 )
 assert(
-  burstA.scor_structura !== burstB.scor_structura,
-  "Burst-linear structure must differ between texts",
+  (burstA.burstiness ?? 0) !== (burstB.burstiness ?? 0),
+  "Burstiness metric must differ between texts",
 )
 
-console.log("OK: confidence gate — human floor, neural veto, EN phrase scaling.")
+console.log("OK: ensemble matrix — human safety, neural certainty, EN phrase scaling.")
