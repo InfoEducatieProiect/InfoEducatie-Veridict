@@ -98,8 +98,6 @@ export interface AnalysisScore {
   stilometric: number | null
   /** True when stylistic deviation is within acceptable bounds (typically deviation ≤ 40). */
   stilometric_consistent?: boolean | null
-  /** Global web plagiarism report (Gemini grounding + cosine). */
-  plagiarism_urls?: Record<string, unknown> | null
   ttr: number | null
   asl: number | null
   verbs: number | null
@@ -554,21 +552,6 @@ export async function getAnalysisScoreForSubmission(
     student_name: (data as { profiles?: { display_name?: string } }).profiles
       ?.display_name,
   }
-}
-
-/** Persist global web plagiarism JSON on analysis_scores.plagiarism_urls. */
-export async function updateAnalysisScorePlagiarism(
-  analysisScoreId: string,
-  report: Record<string, unknown>,
-  supabaseClient?: SupabaseClient,
-): Promise<void> {
-  const supabase = sb(supabaseClient)
-  const { error } = await supabase
-    .from("analysis_scores")
-    .update({ plagiarism_urls: report })
-    .eq("id", analysisScoreId)
-
-  if (error) throw error
 }
 
 // Get peer matches for an analysis score

@@ -4,16 +4,15 @@
  */
 
 import type { HistoricBaseline } from "./assignment-store"
-import {
-  parsePlagiarismWebReport,
-  type PlagiarismWebReport,
-} from "./plagiarism-web"
+import type { PlagiarismWebReport } from "./plagiarism-web"
+import { fetchScanSourcesMapBySubmissionIds, plagiarismReportFromScanSources } from "./plagiarism-scan-sources"
 import {
   calculateManhattanDeviation,
   computeStylometricVector,
   resolveHistoricProfile,
 } from "./analysisEngine"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import {
   getLatestAnalysisRun,
   getAnalysisScoresWithPeers,
@@ -45,7 +44,7 @@ export interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
-  /** Cached global web plagiarism (analysis_scores.plagiarism_urls). */
+  /** Cached global web plagiarism (`scan_sources` per submission). */
   plagiarismWeb?: PlagiarismWebReport | null
   /** Supabase ids for forensic stylometry API (camelCase + snake_case from API). */
   id?: string
@@ -185,6 +184,15 @@ export async function loadAnalysisReportForAssignment(
   if (!rows.length) return null
 
   const baselinesByStudentId = await getStudentBaselines(supabaseClient)
+  const supabase = supabaseClient ?? createBrowserClient()
+  const submissionIds = (rows as ScoreWithPeers[])
+    .map((r) => r.submission_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0)
+  const scanSourcesBySubmission = await fetchScanSourcesMapBySubmissionIds(
+    supabase,
+    submissionIds,
+  )
+
   const scores: Record<string, StudentScore> = {}
   const { graphEdges, graphNodes } = rebuildGraphFromRows(rows as ScoreWithPeers[])
 
@@ -223,7 +231,14 @@ export async function loadAnalysisReportForAssignment(
       historicAdjectiveDensity: historicVec.adjectiveDensity,
       historicPunctuationUsage: historicVec.punctuationUsage,
       peerMatches,
-      plagiarismWeb: parsePlagiarismWebReport(row.plagiarism_urls ?? null),
+      plagiarismWeb: row.submission_id
+        ? (() => {
+            const sources = scanSourcesBySubmission.get(row.submission_id!) ?? []
+            return sources.length > 0
+              ? plagiarismReportFromScanSources(sources)
+              : null
+          })()
+        : null,
       id: row.id,
       analysisScoreId: row.id,
       analysis_score_id: row.id,

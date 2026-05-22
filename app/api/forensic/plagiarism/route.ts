@@ -3,19 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 import { runPlagiarismGeminiScan } from "@/lib/plagiarism-gemini-python"
 import type { PlagiarismWebReport } from "@/lib/plagiarism-web"
 import {
-  getAnalysisScoreForSubmission,
-  updateAnalysisScorePlagiarism,
-} from "@/lib/supabase/queries"
+  fetchScanSourcesForSubmission,
+  plagiarismReportFromScanSources,
+  plagiarismScorToPercent,
+} from "@/lib/plagiarism-scan-sources"
 
 type JsonBody = Record<string, unknown>
 
 interface SubmissionRow {
   text?: string | null
-}
-
-interface ScanSourceRow {
-  url: string
-  similarity_score: number
 }
 
 function readStringField(
@@ -33,60 +29,6 @@ function readForceFlag(body: JsonBody): boolean {
   return body.force === true
 }
 
-/** Python `scor` / `scor_maxim` may be 0–1 or 0–100; DB columns store percentage 0–100. */
-function toPercent(value: number): number {
-  if (value <= 0) return 0
-  if (value <= 1) return Math.round(value * 1000) / 10
-  return value
-}
-
-/** Collapse duplicate URLs (keeps highest similarity_score), newest-first order. */
-function dedupeScanSources(rows: ScanSourceRow[]): ScanSourceRow[] {
-  const byUrl = new Map<string, ScanSourceRow>()
-  for (const row of rows) {
-    const url = row.url.trim()
-    if (!url) continue
-    const score = Number(row.similarity_score)
-    const prev = byUrl.get(url)
-    if (!prev || score > Number(prev.similarity_score)) {
-      byUrl.set(url, { url, similarity_score: score })
-    }
-  }
-  return [...byUrl.values()].sort(
-    (a, b) => b.similarity_score - a.similarity_score,
-  )
-}
-
-/** Verdict from stored DB percentages only — never run plagiarism-web.ts amplification. */
-function buildVerdictFromPercent(topScor: number): string {
-  if (topScor >= 40) {
-    return `❌ ALERTĂ DETECTATĂ: Text preluat de pe internet (Similitudine Cosinus: ${topScor.toFixed(1)}%).`
-  }
-  if (topScor >= 15) {
-    return `❓ SUSPECT: Structură parțial similară sau parafrazare inteligentă (${topScor.toFixed(1)}%).`
-  }
-  return `✅ TEXT AUTENTIC: Text original în raport cu indexul public online.`
-}
-
-function reconstructReportFromScanSources(
-  sources: ScanSourceRow[],
-): PlagiarismWebReport {
-  const deduped = dedupeScanSources(sources)
-  const plagiarism_urls = deduped.map((row) => ({
-    url: row.url,
-    scor: Number(row.similarity_score),
-  }))
-
-  const topScor = plagiarism_urls[0]?.scor ?? 0
-
-  return {
-    verdict: buildVerdictFromPercent(topScor),
-    scor_maxim: topScor / 100,
-    sursa_principala: plagiarism_urls[0]?.url ?? null,
-    plagiarism_urls,
-  }
-}
-
 function reportToJsonResponse(report: PlagiarismWebReport, fromDb: boolean) {
   return {
     report: {
@@ -100,20 +42,6 @@ function reportToJsonResponse(report: PlagiarismWebReport, fromDb: boolean) {
     },
     fromDb,
   }
-}
-
-async function fetchExistingScanSources(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  submissionId: string,
-): Promise<ScanSourceRow[]> {
-  const { data, error } = await supabase
-    .from("scan_sources")
-    .select("url, similarity_score")
-    .eq("submission_id", submissionId)
-    .order("similarity_score", { ascending: false })
-
-  if (error) throw error
-  return dedupeScanSources((data ?? []) as ScanSourceRow[])
 }
 
 async function wipeScanSourcesForSubmission(
@@ -132,7 +60,6 @@ async function persistFreshScan(
   supabase: Awaited<ReturnType<typeof createClient>>,
   submissionId: string,
   pythonResult: PlagiarismWebReport,
-  analysisScoreId: string | null,
 ): Promise<void> {
   const seenUrls = new Set<string>()
   const rows: {
@@ -143,7 +70,7 @@ async function persistFreshScan(
 
   for (const hit of pythonResult.plagiarism_urls) {
     const url = hit.url.trim()
-    const score = toPercent(hit.scor)
+    const score = plagiarismScorToPercent(hit.scor)
     if (!url || score <= 0) continue
     if (seenUrls.has(url)) continue
     seenUrls.add(url)
@@ -162,7 +89,7 @@ async function persistFreshScan(
     if (insertError) throw insertError
   }
 
-  const aiScorePercent = toPercent(pythonResult.scor_maxim)
+  const aiScorePercent = plagiarismScorToPercent(pythonResult.scor_maxim)
 
   const { error: submissionUpdateError } = await supabase
     .from("submissions")
@@ -170,22 +97,6 @@ async function persistFreshScan(
     .eq("id", submissionId)
 
   if (submissionUpdateError) throw submissionUpdateError
-
-  if (analysisScoreId) {
-    await updateAnalysisScorePlagiarism(
-      analysisScoreId,
-      {
-        verdict: pythonResult.verdict,
-        scor_maxim: pythonResult.scor_maxim,
-        sursa_principala: pythonResult.sursa_principala,
-        plagiarism_urls: pythonResult.plagiarism_urls.map((hit) => ({
-          url: hit.url,
-          scor: hit.scor,
-        })),
-      },
-      supabase,
-    )
-  }
 }
 
 /**
@@ -252,13 +163,13 @@ export async function POST(request: Request) {
     // ── 2. Cache check (skip when force === true) ─────────────────────────────
     if (!force) {
       try {
-        const existingSources = await fetchExistingScanSources(
+        const existingSources = await fetchScanSourcesForSubmission(
           supabase,
           submissionId,
         )
 
         if (existingSources.length > 0) {
-          const cachedReport = reconstructReportFromScanSources(existingSources)
+          const cachedReport = plagiarismReportFromScanSources(existingSources)
           return NextResponse.json(reportToJsonResponse(cachedReport, true))
         }
       } catch (cacheErr) {
@@ -301,17 +212,7 @@ export async function POST(request: Request) {
     const pythonResult = await runPlagiarismGeminiScan(text, submissionId)
 
     try {
-      const scoreRow = await getAnalysisScoreForSubmission(
-        assignmentId,
-        submissionId,
-        supabase,
-      )
-      await persistFreshScan(
-        supabase,
-        submissionId,
-        pythonResult,
-        scoreRow?.id ?? null,
-      )
+      await persistFreshScan(supabase, submissionId, pythonResult)
     } catch (dbErr) {
       console.error("[api/forensic/plagiarism] DB persist failed:", dbErr)
     }
