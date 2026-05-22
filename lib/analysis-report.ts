@@ -4,16 +4,26 @@
  */
 
 import type { HistoricBaseline } from "./assignment-store"
+import type { PlagiarismWebReport } from "./plagiarism-web"
+import { fetchScanSourcesMapBySubmissionIds, plagiarismReportFromScanSources } from "./plagiarism-scan-sources"
+import {
+  parseStylometryMetricsFromDb,
+  type StylometryDbMetrics,
+} from "./stylometry-db-metrics"
+
+export type { StylometryDbMetrics } from "./stylometry-db-metrics"
 import {
   calculateManhattanDeviation,
   computeStylometricVector,
   resolveHistoricProfile,
 } from "./analysisEngine"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import {
   getLatestAnalysisRun,
   getAnalysisScoresWithPeers,
   getStudentBaselines,
+  sortByCreatedAtDesc,
   type StudentBaseline,
   type AnalysisScore,
 } from "@/lib/supabase/queries"
@@ -33,6 +43,21 @@ export interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
+  /** Cached global web plagiarism (`scan_sources` per submission). */
+  plagiarismWeb?: PlagiarismWebReport | null
+  /** Supabase ids for forensic stylometry API (camelCase + snake_case from API). */
+  id?: string
+  analysisScoreId?: string
+  analysis_score_id?: string
+  studentId?: string
+  student_id?: string
+  submissionId?: string
+  submission_id?: string
+  /** Raw deviation % from analysis_scores.stilometric (spaCy pipeline). */
+  stilometricDeviation?: number
+  /** Raw DB metrics (no UI scaling) for Recharts radar. */
+  stylometryMetrics?: StylometryDbMetrics | null
+  stylometryBaseline?: StylometryDbMetrics | null
 }
 
 export interface AnalysisReport {
@@ -65,7 +90,16 @@ function baselineFromRow(row: StudentBaseline | undefined): HistoricBaseline | n
 }
 
 function stylometricLabel(deviation: number): StudentScore["stilometric"] {
-  return deviation > 40 ? "Abatere Stilistica" : "Stil Consistent"
+  return deviation >= 38 ? "Abatere Stilistica" : "Stil Consistent"
+}
+
+function rawMetricsFromScoreRow(row: AnalysisScore): StylometryDbMetrics | null {
+  return parseStylometryMetricsFromDb(row)
+}
+
+function rawBaselineFromRow(row: StudentBaseline | undefined): StylometryDbMetrics | null {
+  if (!row) return null
+  return parseStylometryMetricsFromDb(row)
 }
 
 type ScoreWithPeers = AnalysisScore & {
@@ -125,23 +159,44 @@ function rebuildGraphFromRows(
 }
 
 /** Încarcă ultimul raport pentru o temă. */
+/** Încarcă ultimul raport pentru o temă. */
 export async function loadAnalysisReportForAssignment(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisReport | null> {
-  const run = await getLatestAnalysisRun(assignmentId, supabaseClient)
+  // Fix pentru eroare: Folosește clientul primit ca parametru sau fallback pe createBrowserClient din importuri
+  const supabase = supabaseClient ?? createBrowserClient()
+
+  // 1. Căutăm cea mai nouă rulare globală pentru această temă
+  const run = await getLatestAnalysisRun(assignmentId, supabase)
   if (!run) return null
 
-  const rows = await getAnalysisScoresWithPeers(run.id, supabaseClient)
+  // 2. Extragem toate scorurile salvate pentru acea rulare
+  const rows = await getAnalysisScoresWithPeers(run.id, supabase)
   if (!rows.length) return null
 
-  const baselinesByStudentId = await getStudentBaselines(supabaseClient)
-  const scores: Record<string, StudentScore> = {}
-  const { graphEdges, graphNodes } = rebuildGraphFromRows(rows as ScoreWithPeers[])
+  // 3. Extragem profilul istoric al elevilor (baselines)
+  const baselinesByStudentId = await getStudentBaselines(supabase)
+  
+  const submissionIds = (rows as ScoreWithPeers[])
+    .map((r) => r.submission_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0)
+    
+  const scanSourcesBySubmission = await fetchScanSourcesMapBySubmissionIds(
+    supabase,
+    submissionIds,
+  )
 
-  for (const row of rows as ScoreWithPeers[]) {
-    const studentName =
-      row.student_name ?? `Student ${row.student_id.slice(0, 8)}`
+  const scores: Record<string, StudentScore> = {}
+  const sortedRows = sortByCreatedAtDesc(rows as ScoreWithPeers[])
+  const { graphEdges, graphNodes } = rebuildGraphFromRows(sortedRows)
+  const seenStudentIds = new Set<string>()
+
+  for (const row of sortedRows) {
+    if (seenStudentIds.has(row.student_id)) continue
+    seenStudentIds.add(row.student_id)
+
+    const studentName = row.student_name ?? `Student ${row.student_id.slice(0, 8)}`
     const dbBaseline = baselineFromRow(baselinesByStudentId[row.student_id])
     const historicVec = resolveHistoricProfile(studentName, dbBaseline)
     const deviation = row.stilometric ?? 0
@@ -155,27 +210,63 @@ export async function loadAnalysisReportForAssignment(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 4)
 
+    const rawMetrics = rawMetricsFromScoreRow(row)
+    const rawBaseline = rawBaselineFromRow(baselinesByStudentId[row.student_id])
+
+    const uiTtr = rawMetrics?.ttr ?? historicVec.lexicalDiversity
+    const uiAsl = rawMetrics?.asl ?? historicVec.avgSentenceLength
+    const uiVerbs = rawMetrics?.verbs ?? historicVec.verbDensity
+    const uiAdjs = rawMetrics?.adjs ?? historicVec.adjectiveDensity
+    const uiPunct = rawMetrics?.punct ?? historicVec.punctuationUsage
+
+    console.log("[Stylometry Debug] loadAnalysisReportForAssignment row", {
+      studentName,
+      verbsRawFromDb: row.verbs,
+      verbsMappedToUi: uiVerbs,
+      stylometryMetrics: rawMetrics,
+    })
+
     scores[studentName] = {
       aiScore: row.ai_score ?? 0,
       similarity: row.similarity ?? 0,
       stilometric: stylometricLabel(deviation),
-      lexicalDiversity: row.ttr ?? 0,
-      avgSentenceLength: row.asl ?? 0,
-      verbDensity: row.verbs ?? 0,
-      adjectiveDensity: row.adjs ?? 0,
-      punctuationUsage: row.punct ?? 0,
-      historicLexicalDiversity: historicVec.lexicalDiversity,
-      historicAvgSentenceLength: historicVec.avgSentenceLength,
-      historicVerbDensity: historicVec.verbDensity,
-      historicAdjectiveDensity: historicVec.adjectiveDensity,
-      historicPunctuationUsage: historicVec.punctuationUsage,
+      lexicalDiversity: uiTtr,
+      avgSentenceLength: uiAsl,
+      verbDensity: uiVerbs,
+      adjectiveDensity: uiAdjs,
+      punctuationUsage: uiPunct,
+      historicLexicalDiversity: rawBaseline?.ttr ?? historicVec.lexicalDiversity,
+      historicAvgSentenceLength: rawBaseline?.asl ?? historicVec.avgSentenceLength,
+      historicVerbDensity: rawBaseline?.verbs ?? historicVec.verbDensity,
+      historicAdjectiveDensity: rawBaseline?.adjs ?? historicVec.adjectiveDensity,
+      historicPunctuationUsage: rawBaseline?.punct ?? historicVec.punctuationUsage,
       peerMatches,
+      plagiarismWeb: row.submission_id
+        ? (() => {
+            const sources = scanSourcesBySubmission.get(row.submission_id!) ?? []
+            return sources.length > 0
+              ? plagiarismReportFromScanSources(sources)
+              : null
+          })()
+        : null,
+      id: row.id,
+      analysisScoreId: row.id,
+      analysis_score_id: row.id,
+      studentId: row.student_id,
+      student_id: row.student_id,
+      submissionId: row.submission_id ?? undefined,
+      submission_id: row.submission_id ?? undefined,
+      stilometricDeviation: deviation,
+      
+      // CRUCIAL PENTRU RADAR: Obiectele care trimit datele live în grafic la refresh
+      stylometryMetrics: rawMetrics,
+      stylometryBaseline: rawBaseline,
     }
   }
 
   return {
     assignmentId,
-    ranAt: run.ran_at,
+    ranAt: run.created_at ?? run.ran_at,
     scores,
     graphEdges,
     graphNodes,

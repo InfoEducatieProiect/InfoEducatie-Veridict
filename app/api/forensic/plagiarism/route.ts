@@ -1,0 +1,226 @@
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import { runPlagiarismGeminiScan } from "@/lib/plagiarism-gemini-python"
+import type { PlagiarismWebReport } from "@/lib/plagiarism-web"
+import {
+  fetchScanSourcesForSubmission,
+  plagiarismReportFromScanSources,
+  plagiarismScorToPercent,
+} from "@/lib/plagiarism-scan-sources"
+
+type JsonBody = Record<string, unknown>
+
+interface SubmissionRow {
+  text?: string | null
+}
+
+function readStringField(
+  body: JsonBody,
+  snake: string,
+  camel: string,
+): string | undefined {
+  const raw = body[snake] ?? body[camel]
+  if (typeof raw !== "string") return undefined
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function readForceFlag(body: JsonBody): boolean {
+  return body.force === true
+}
+
+function reportToJsonResponse(report: PlagiarismWebReport, fromDb: boolean) {
+  return {
+    report: {
+      verdict: report.verdict,
+      scor_maxim: report.scor_maxim,
+      sursa_principala: report.sursa_principala,
+      plagiarism_urls: report.plagiarism_urls.map((hit) => ({
+        url: hit.url,
+        scor: hit.scor,
+      })),
+    },
+    fromDb,
+  }
+}
+
+async function wipeScanSourcesForSubmission(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  submissionId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("scan_sources")
+    .delete()
+    .eq("submission_id", submissionId)
+
+  if (error) throw error
+}
+
+async function persistFreshScan(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  submissionId: string,
+  pythonResult: PlagiarismWebReport,
+): Promise<void> {
+  const seenUrls = new Set<string>()
+  const rows: {
+    submission_id: string
+    url: string
+    similarity_score: number
+  }[] = []
+
+  for (const hit of pythonResult.plagiarism_urls) {
+    const url = hit.url.trim()
+    const score = plagiarismScorToPercent(hit.scor)
+    if (!url || score <= 0) continue
+    if (seenUrls.has(url)) continue
+    seenUrls.add(url)
+    rows.push({
+      submission_id: submissionId,
+      url,
+      similarity_score: score,
+    })
+  }
+
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase
+      .from("scan_sources")
+      .insert(rows)
+
+    if (insertError) throw insertError
+  }
+
+  const aiScorePercent = plagiarismScorToPercent(pythonResult.scor_maxim)
+
+  const { error: submissionUpdateError } = await supabase
+    .from("submissions")
+    .update({ analysed: true, ai_score: aiScorePercent })
+    .eq("id", submissionId)
+
+  if (submissionUpdateError) throw submissionUpdateError
+}
+
+/**
+ * POST — web plagiarism scan with DB cache on scan_sources.
+ *
+ * Body: { assignment_id|assignmentId, submission_id|submissionId, text?, force? }
+ */
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    let body: JsonBody
+    try {
+      body = (await request.json()) as JsonBody
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
+    const force = readForceFlag(body)
+    const assignmentId = readStringField(body, "assignment_id", "assignmentId")
+    const submissionId = readStringField(body, "submission_id", "submissionId")
+    if (!assignmentId || !submissionId) {
+      return NextResponse.json(
+        { error: "assignment_id and submission_id required" },
+        { status: 400 },
+      )
+    }
+
+    const { data: assignmentRow, error: assnErr } = await supabase
+      .from("assignments")
+      .select("id, professor_id")
+      .eq("id", assignmentId)
+      .maybeSingle()
+
+    if (assnErr) throw assnErr
+    if (!assignmentRow) {
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 })
+    }
+    if (assignmentRow.professor_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // ── MODIFICARE AICI: Am eliminat coloana 'content' care nu exista în DB
+    const { data: submission, error: subErr } = await supabase
+      .from("submissions")
+      .select("id, text, assignment_id")
+      .eq("id", submissionId)
+      .eq("assignment_id", assignmentId)
+      .maybeSingle()
+
+    if (subErr) throw subErr
+    if (!submission) {
+      return NextResponse.json({ error: "Submission not found" }, { status: 404 })
+    }
+
+    const subRow = submission as SubmissionRow
+
+    // ── 2. Cache check (skip when force === true) ─────────────────────────────
+    if (!force) {
+      try {
+        const existingSources = await fetchScanSourcesForSubmission(
+          supabase,
+          submissionId,
+        )
+
+        if (existingSources.length > 0) {
+          const cachedReport = plagiarismReportFromScanSources(existingSources)
+          return NextResponse.json(reportToJsonResponse(cachedReport, true))
+        }
+      } catch (cacheErr) {
+        console.error(
+          "[api/forensic/plagiarism] Cache lookup failed, continuing to fresh scan:",
+          cacheErr,
+        )
+      }
+    }
+
+    // ── 3. Rescan / cache miss / force ───────────────────────────────────────
+    try {
+      await wipeScanSourcesForSubmission(supabase, submissionId)
+    } catch (wipeErr) {
+      console.error(
+        "[api/forensic/plagiarism] Pre-scan wipe failed (aborting insert to avoid duplicates):",
+        wipeErr,
+      )
+      return NextResponse.json(
+        { error: "Could not clear previous scan results" },
+        { status: 500 },
+      )
+    }
+
+    const bodyText =
+      typeof body.text === "string" ? body.text.trim() : ""
+    
+    // ── MODIFICARE AICI: Ne bazăm exclusiv pe text-ul valid din DB
+    const text =
+      bodyText ||
+      (subRow.text ?? "").trim()
+
+    if (!text) {
+      return NextResponse.json(
+        { error: "Submission has no text to scan" },
+        { status: 400 },
+      )
+    }
+
+    const pythonResult = await runPlagiarismGeminiScan(text, submissionId)
+
+    try {
+      await persistFreshScan(supabase, submissionId, pythonResult)
+    } catch (dbErr) {
+      console.error("[api/forensic/plagiarism] DB persist failed:", dbErr)
+    }
+
+    return NextResponse.json(reportToJsonResponse(pythonResult, false))
+  } catch (e) {
+    console.error("[api/forensic/plagiarism]", e)
+    const message = e instanceof Error ? e.message : "Plagiarism scan failed"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}

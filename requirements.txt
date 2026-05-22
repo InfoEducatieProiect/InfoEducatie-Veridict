@@ -4,3 +4,7 @@ protobuf>=4.25.0
 sentencepiece>=0.2.0
 langdetect>=1.0.9
 numpy>=1.26.0
+google-genai>=1.0.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+spacy>=3.7.0

@@ -1,12 +1,18 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowLeft, Network, Radar, ShieldAlert, ShieldCheck, CheckCircle2,
   AlertTriangle, Info, X, GitCompare, ExternalLink, Globe,
 } from "lucide-react"
 import type { StudentScore } from "@/lib/assignment-store"
+import RadarStilometricTab from "@/components/RadarStilometricTab"
+import {
+  buildStylometryVerdict,
+  type StylometryMetrics,
+  type StylometryVerdict,
+} from "@/lib/stylometry-types"
 import { BALTAGUL_TEXTS } from "@/lib/assignment-store"
 import {
   getSimilarPhrases,
@@ -21,6 +27,8 @@ interface ForensicAnalyzerProps {
   studentName: string
   score: StudentScore
   onBack: () => void
+  assignmentId: string
+  submissionId: string
   /** Map of all submission texts for this assignment — used by the split-screen comparison */
   submissionTexts: Record<string, string>
   /** Map of studentName → aiScore for all students — drives the Global Integrity Graph node labels */
@@ -29,6 +37,17 @@ interface ForensicAnalyzerProps {
   integrityGraphEdges?: { a: string; b: string; sim: number }[]
   /** Display names ordering for integrity graph nodes (class submissions) */
   integrityGraphNodes?: string[]
+  /** Called when a new web plagiarism report is persisted */
+  onPlagiarismReport?: (report: RaportPlagiatWeb) => void
+  /** Called when stylometry scan completes (DB write via API + parent state sync) */
+  onStylometryComplete?: (payload: {
+    metrics: StylometryMetrics
+    baseline_used: StylometryMetrics
+    deviation: number
+    verdict: StylometryVerdict
+  }) => void
+  analysisScoreId: string
+  studentId: string
 }
 
 function HighlightedText({
@@ -507,9 +526,6 @@ function LocalSimilarityGraph({
             <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
               Graf de Similaritate Local
             </h4>
-            <span className="ml-auto text-xs" style={{ color: "var(--dash-muted)" }}>
-              Apasati pe o muchie pentru comparatie duala
-            </span>
           </div>
           <div className="flex justify-center overflow-x-auto">
             <svg width="560" height="360" aria-label={`Graf de similaritate pentru ${studentName}`}>
@@ -1113,25 +1129,41 @@ export interface RaportPlagiatWeb {
   top_surse: SursaWeb[]
 }
 
-// ─── Mock data — swap `rezultatPlagiatWeb` with real API output later ──────────
-
-const MOCK_RAPORT_DETECTAT: RaportPlagiatWeb = {
-  verdict: "ALERTA DETECTATA: Text preluat de pe internet",
-  scor_maxim: 0.672,
-  sursa_principala: "https://ro.wikipedia.org/wiki/Al_Doilea_Razboi_Mondial",
-  top_surse: [
-    { url: "https://ro.wikipedia.org/wiki/Al_Doilea_Razboi_Mondial", scor: 0.672 },
-    { url: "https://www.historia.ro/sectiune/general/articol/al-doilea-razboi-mondial", scor: 0.541 },
-    { url: "https://www.digi24.ro/stiri/lumea/al-doilea-razboi-mondial-istoria", scor: 0.489 },
-    { url: "https://enciclopediaromaneasca.ro/razboi-mondial-II", scor: 0.421 },
-  ],
+function hitScorPct(item: { scor?: number; score?: number }): number {
+  const raw = item.scor ?? item.score ?? 0
+  return raw > 1 ? Math.round(raw) : Math.round(raw * 100)
 }
 
-const MOCK_RAPORT_CURAT: RaportPlagiatWeb = {
-  verdict: "TEXT AUTENTIC",
-  scor_maxim: 0.0,
-  sursa_principala: null,
-  top_surse: [],
+function hitScorUnit(item: { scor?: number; score?: number }): number {
+  const raw = item.scor ?? item.score ?? 0
+  return raw > 1 ? raw / 100 : raw
+}
+
+function apiReportToUi(raw: {
+  verdict: string
+  scor_maxim: number
+  sursa_principala: string | null
+  plagiarism_urls?: { url: string; scor?: number; score?: number }[]
+  top_surse?: { url: string; scor?: number; score?: number }[]
+}): RaportPlagiatWeb {
+  const hits = raw.plagiarism_urls?.length
+    ? raw.plagiarism_urls
+    : raw.top_surse ?? []
+  return {
+    verdict: raw.verdict,
+    scor_maxim: raw.scor_maxim,
+    sursa_principala: raw.sursa_principala,
+    top_surse: hits.map((u) => ({
+      url: u.url,
+      scor: hitScorUnit(u),
+    })),
+  }
+}
+
+function cachedScoreToUi(score: StudentScore): RaportPlagiatWeb | null {
+  const pw = score.plagiarismWeb
+  if (!pw) return null
+  return apiReportToUi(pw)
 }
 
 // ─── Tab 4: Web Scanner (Scanare Web Globală) ─────────────────────────────────
@@ -1142,13 +1174,126 @@ function badgeColorForScor(scor: number): { bg: string; text: string } {
   return { bg: "rgba(16,185,129,0.10)", text: "#065F46" }
 }
 
-function WebScannerPanel({ studentName }: { studentName: string }) {
-  // Toggle between the two mock states for demo purposes.
-  // In production: replace `rezultatPlagiatWeb` with the API response.
-  const [showDetected, setShowDetected] = useState(true)
-  const rezultatPlagiatWeb: RaportPlagiatWeb = showDetected ? MOCK_RAPORT_DETECTAT : MOCK_RAPORT_CURAT
-  const hasDetections = rezultatPlagiatWeb.top_surse.length > 0
-  const scorMaximPct = Math.round(rezultatPlagiatWeb.scor_maxim * 100)
+function WebScannerPanel({
+  studentName,
+  assignmentId,
+  submissionId,
+  initialReport,
+  onReport,
+}: {
+  studentName: string
+  assignmentId: string
+  submissionId: string
+  initialReport: RaportPlagiatWeb | null
+  onReport?: (report: RaportPlagiatWeb) => void
+}) {
+  const [rezultatPlagiatWeb, setRezultatPlagiatWeb] = useState<RaportPlagiatWeb | null>(
+    initialReport,
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const runScan = useCallback(
+    async (force = false) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch("/api/forensic/plagiarism", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assignment_id: assignmentId,
+            submission_id: submissionId,
+            force,
+          }),
+        })
+        const data = (await res.json()) as {
+          report?: {
+            verdict: string
+            scor_maxim: number
+            sursa_principala: string | null
+            plagiarism_urls?: { url: string; scor?: number; score?: number }[]
+          }
+          error?: string
+        }
+        if (!res.ok) {
+          throw new Error(data.error ?? "Scanare esuata")
+        }
+        if (!data.report) {
+          throw new Error("Raspuns invalid de la server")
+        }
+        const ui = apiReportToUi(data.report)
+        setRezultatPlagiatWeb(ui)
+        onReport?.(ui)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Eroare la scanare")
+      } finally {
+        setLoading(false)
+      }
+    },
+    [assignmentId, submissionId, onReport],
+  )
+
+  useEffect(() => {
+    if (initialReport) {
+      setRezultatPlagiatWeb(initialReport)
+      return
+    }
+    void runScan(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per submission
+  }, [assignmentId, submissionId])
+
+  if (loading && !rezultatPlagiatWeb) {
+    return (
+      <div
+        className="flex flex-col items-center gap-3 rounded-2xl border p-10 text-center"
+        style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}
+      >
+        <Globe size={32} className="animate-pulse" style={{ color: "var(--dash-accent)" }} />
+        <p className="text-sm font-semibold" style={{ color: "var(--dash-fg)" }}>
+          Scanare Web Globală în curs pentru {studentName}…
+        </p>
+        <p className="text-xs" style={{ color: "var(--dash-muted)" }}>
+          Gemini Flash + similitudine cosinus pe surse indexate
+        </p>
+      </div>
+    )
+  }
+
+  if (error && !rezultatPlagiatWeb) {
+    return (
+      <div
+        className="rounded-2xl border p-6 text-center"
+        style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.25)" }}
+      >
+        <p className="text-sm font-bold text-red-700">{error}</p>
+        <button
+          type="button"
+          onClick={() => void runScan(true)}
+          className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-white"
+          style={{ background: "var(--dash-navy)" }}
+        >
+          Reîncearcă scanarea
+        </button>
+      </div>
+    )
+  }
+
+  if (!rezultatPlagiatWeb) return null
+
+  const urlHits = rezultatPlagiatWeb.top_surse
+  const hasDetections =
+    urlHits.length > 0 ||
+    !!rezultatPlagiatWeb.sursa_principala ||
+    rezultatPlagiatWeb.scor_maxim > 0
+  const scorMaximPct = Math.round(
+    rezultatPlagiatWeb.scor_maxim <= 1
+      ? rezultatPlagiatWeb.scor_maxim * 100
+      : rezultatPlagiatWeb.scor_maxim,
+  )
+  const verdictLower = rezultatPlagiatWeb.verdict.toLowerCase()
+  const scanIncomplete =
+    verdictLower.includes("incomplet") || verdictLower.includes("verifica gemini")
 
   return (
     <motion.div
@@ -1156,35 +1301,37 @@ function WebScannerPanel({ studentName }: { studentName: string }) {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col gap-5"
     >
-      {/* Demo toggle — remove in production */}
-      <div className="flex items-center gap-3 rounded-xl border border-dashed px-4 py-2.5" style={{ borderColor: "var(--dash-border)", background: "var(--dash-card)" }}>
-        <span className="text-xs font-semibold" style={{ color: "var(--dash-muted)" }}>
-          Mod demonstratie:
-        </span>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs leading-relaxed max-w-xl" style={{ color: "var(--dash-muted)" }}>
+          {rezultatPlagiatWeb.verdict}
+        </p>
         <button
-          onClick={() => setShowDetected(true)}
-          className="rounded-lg px-3 py-1 text-xs font-bold transition-all"
-          style={{
-            background: showDetected ? "var(--dash-navy)" : "transparent",
-            color: showDetected ? "#fff" : "var(--dash-muted)",
-          }}
+          type="button"
+          disabled={loading}
+          onClick={() => void runScan(true)}
+          className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50"
+          style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)" }}
         >
-          Alerta detectata
-        </button>
-        <button
-          onClick={() => setShowDetected(false)}
-          className="rounded-lg px-3 py-1 text-xs font-bold transition-all"
-          style={{
-            background: !showDetected ? "#10B981" : "transparent",
-            color: !showDetected ? "#fff" : "var(--dash-muted)",
-          }}
-        >
-          Text autentic
+          {loading ? "Se scanează…" : "Re-scanează"}
         </button>
       </div>
 
+      {scanIncomplete && (
+        <div
+          className="rounded-xl border px-4 py-3 text-xs"
+          style={{
+            background: "rgba(245,158,11,0.08)",
+            borderColor: "rgba(245,158,11,0.35)",
+            color: "#92400E",
+          }}
+        >
+          Scan incomplet: Google Grounding nu a returnat URL-uri. Verifica{" "}
+          <code className="font-mono">GEMINI_API_KEY</code> în .env.local și apasă Re-scanează.
+        </div>
+      )}
+
       {/* STATE A — No detections */}
-      {!hasDetections && (
+      {!hasDetections && !scanIncomplete && (
         <motion.div
           key="curat"
           initial={{ opacity: 0, scale: 0.98 }}
@@ -1224,7 +1371,7 @@ function WebScannerPanel({ studentName }: { studentName: string }) {
             </div>
             <div className="flex flex-col gap-1">
               <p className="text-sm font-black" style={{ color: "#B91C1C" }}>
-                ALERTA DETECTATA: Text preluat de pe internet
+                {rezultatPlagiatWeb.verdict}
               </p>
               <p className="text-xs leading-relaxed" style={{ color: "var(--dash-muted)" }}>
                 Scor maxim de potrivire:{" "}
@@ -1257,39 +1404,37 @@ function WebScannerPanel({ studentName }: { studentName: string }) {
                 Distanța geometrică în indexul online:
               </p>
             </div>
-            <ul className="flex flex-col divide-y" style={{ borderColor: "var(--dash-border)" }}>
-              {rezultatPlagiatWeb.top_surse.map((sursa, idx) => {
-                const pct = Math.round(sursa.scor * 100)
-                const { bg, text } = badgeColorForScor(sursa.scor)
+            <div className="flex flex-col divide-y" style={{ borderColor: "var(--dash-border)" }}>
+              {urlHits.map((item, idx) => {
+                const pct = hitScorPct(item)
+                const unitScor = hitScorUnit(item)
+                const { bg, text } = badgeColorForScor(unitScor)
                 return (
-                  <motion.li
-                    key={sursa.url}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.07 }}
-                    className="flex items-center gap-3 px-5 py-3.5"
+                  <div
+                    key={`${item.url}-${idx}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3.5 border-b"
+                    style={{ borderColor: "var(--dash-border)" }}
                   >
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex min-w-0 flex-1 items-center gap-1.5 text-xs underline underline-offset-2 truncate text-blue-600 hover:underline"
+                      title={item.url}
+                    >
+                      <ExternalLink size={11} aria-hidden="true" className="shrink-0" />
+                      <span className="truncate max-w-xl">{item.url}</span>
+                    </a>
                     <span
                       className="shrink-0 rounded-full px-3 py-1 text-xs font-black"
                       style={{ background: bg, color: text }}
                     >
-                      {pct}% Potrivire Cosinus
+                      {pct}% Match
                     </span>
-                    <a
-                      href={sursa.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex min-w-0 items-center gap-1.5 text-xs underline underline-offset-2 truncate"
-                      style={{ color: "var(--dash-accent)" }}
-                      title={sursa.url}
-                    >
-                      <ExternalLink size={11} aria-hidden="true" className="shrink-0" />
-                      <span className="truncate">{sursa.url}</span>
-                    </a>
-                  </motion.li>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
           </div>
         </motion.div>
       )}
@@ -1409,19 +1554,12 @@ function GlobalIntegrityGraph({
       className="w-full max-w-7xl mx-auto rounded-2xl border p-8 min-h-[750px] lg:min-h-[850px]"
       style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}
     >
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <Globe size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
         <h3 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
           Graful de Integritate Global
         </h3>
-        <span className="ml-auto text-xs" style={{ color: "var(--dash-muted)" }}>
-          Linii = similaritate &gt;50% | Noduri fara conexiuni = elevi curati
-        </span>
       </div>
-
-      <p className="mb-6 text-[11px]" style={{ color: "var(--dash-muted)" }}>
-        Click pe un nod pentru a deschide raportul forensic al elevului respectiv.
-      </p>
 
       <div className="overflow-x-auto flex justify-center">
         <svg
@@ -1588,10 +1726,16 @@ export default function ForensicAnalyzer({
   studentName,
   score,
   onBack,
+  assignmentId,
+  submissionId,
   submissionTexts,
+  analysisScoreId,
+  studentId,
   allScores,
   integrityGraphEdges,
   integrityGraphNodes,
+  onPlagiarismReport,
+  onStylometryComplete,
 }: ForensicAnalyzerProps) {
   const [activeTab, setActiveTab] = useState<TabId>("graph")
 
@@ -1687,7 +1831,24 @@ export default function ForensicAnalyzer({
         )}
         {activeTab === "radar" && (
           <motion.div key="radar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <StylometricRadar score={score} />
+            <RadarStilometricTab
+              studentName={studentName}
+              assignmentId={assignmentId}
+              submissionId={submissionId}
+              analysisScoreId={analysisScoreId}
+              studentId={studentId}
+              text={submissionTexts[studentName] ?? ""}
+              initialMetrics={score.stylometryMetrics ?? null}
+              initialBaseline={score.stylometryBaseline ?? null}
+              initialDeviation={score.stilometricDeviation ?? null}
+              initialVerdict={
+                score.stilometricDeviation != null
+                  ? buildStylometryVerdict(score.stilometricDeviation)
+                  : null
+              }
+              autoRunOnMount
+              onAnalysisComplete={onStylometryComplete}
+            />
           </motion.div>
         )}
         {activeTab === "classification" && (
@@ -1697,7 +1858,13 @@ export default function ForensicAnalyzer({
         )}
         {activeTab === "webscanner" && (
           <motion.div key="webscanner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <WebScannerPanel studentName={studentName} />
+            <WebScannerPanel
+              studentName={studentName}
+              assignmentId={assignmentId}
+              submissionId={submissionId}
+              initialReport={cachedScoreToUi(score)}
+              onReport={onPlagiarismReport}
+            />
           </motion.div>
         )}
         {activeTab === "globalinteg" && (

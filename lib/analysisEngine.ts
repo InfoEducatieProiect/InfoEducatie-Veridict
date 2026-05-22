@@ -374,6 +374,47 @@ function endsWith(word: string, suffixes: string[]): boolean {
   return suffixes.some((s) => word.endsWith(s))
 }
 
+/**
+ * Raw spaCy-scale percentages for DB storage (NOT 0–100 chart-normalized).
+ * Matches scripts/analiza_stilometrie.py semantics: % of words / word-based ASL.
+ */
+export function computeRawStylometricPercentages(text: string): {
+  ttr: number
+  asl: number
+  verbs: number
+  adjs: number
+  punct: number
+} {
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 4)
+  const words = text
+    .toLowerCase()
+    .replace(/[^\w\săîâțș]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+
+  const totalWords = words.length || 1
+  const uniqueWords = new Set(words).size
+  const punctCount = (text.match(/[.,;:!?()„"–—-]/g) ?? []).length
+
+  const ttr = Math.round((uniqueWords / totalWords) * 1000) / 10
+
+  const asl =
+    sentences.length > 0
+      ? Math.round(
+          (words.length / sentences.length) * 10,
+        ) / 10
+      : 0
+
+  const verbCount = words.filter((w) => endsWith(w, VERB_SUFFIXES)).length
+  const adjCount = words.filter((w) => endsWith(w, ADJ_SUFFIXES)).length
+
+  const verbs = Math.round((verbCount / totalWords) * 1000) / 10
+  const adjs = Math.round((adjCount / totalWords) * 1000) / 10
+  const punct = Math.round((punctCount / totalWords) * 1000) / 10
+
+  return { ttr, asl, verbs, adjs, punct }
+}
+
 export function computeStylometricVector(text: string): StylometricVector {
   const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 4)
   const words = text

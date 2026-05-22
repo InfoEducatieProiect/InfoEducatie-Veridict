@@ -7,15 +7,17 @@ import {
   directedPhrasesFromCaz,
   findCazForUnorderedPair,
   calculateManhattanDeviation,
+  computeRawStylometricPercentages,
   computeStylometricVector,
   resolveHistoricProfile,
   type CazSuspect,
 } from "./analysisEngine"
+import { stylometryMetricsToDbColumns } from "./stylometry-db-metrics"
 import { buildAnalysisReport } from "./analysis-report-build"
 import type { AnalysisReport, SubmissionInput } from "./analysis-report"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  createAnalysisRun,
+  getOrCreateAnalysisRun,
   saveAnalysisScores,
   savePeerMatches,
   updateSubmissionAnalysis,
@@ -59,12 +61,24 @@ export async function persistAnalysisReport(
     baselinesByStudentId,
   )
 
-  const run = await createAnalysisRun(assignmentId, supabase)
+  const run = await getOrCreateAnalysisRun(assignmentId, supabase)
 
   const scoreRows = submissions.map((sub) => {
     const sc = report.scores[sub.studentName]
     const dbBaseline = baselineFromRow(baselinesByStudentId[sub.studentId])
     const stilometricDev = computedToDbStilometric(sub.studentName, sub.text ?? "", dbBaseline)
+
+    const rawStylo = computeRawStylometricPercentages(sub.text ?? "")
+    const dbStylo = stylometryMetricsToDbColumns(rawStylo)
+
+    console.log("[Stylometry Debug] persistAnalysisReport AI run", {
+      student: sub.studentName,
+      chartScaled: {
+        verbDensity: sc?.verbDensity,
+        adjectiveDensity: sc?.adjectiveDensity,
+      },
+      savedToDb: dbStylo,
+    })
 
     return {
       analysis_run_id: run.id,
@@ -73,12 +87,11 @@ export async function persistAnalysisReport(
       ai_score: sc?.aiScore ?? 0,
       similarity: sc?.similarity ?? 0,
       stilometric: stilometricDev,
-      stilometric_consistent: stilometricDev <= 40,
-      ttr: sc?.lexicalDiversity ?? null,
-      asl: sc?.avgSentenceLength ?? null,
-      verbs: sc?.verbDensity ?? null,
-      adjs: sc?.adjectiveDensity ?? null,
-      punct: sc?.punctuationUsage ?? null,
+      ttr: dbStylo.ttr,
+      asl: dbStylo.asl,
+      verbs: dbStylo.verbs,
+      adjs: dbStylo.adjs,
+      punct: dbStylo.punct,
     }
   })
 
@@ -126,7 +139,8 @@ export async function persistAnalysisReport(
   }
 
   if (peerRowsFlat.length > 0) {
-    await savePeerMatches(peerRowsFlat, supabase)
+    const affectedScoreIds = insertedScores.map((s) => s.id).filter(Boolean)
+    await savePeerMatches(peerRowsFlat, supabase, affectedScoreIds)
   }
 
   await Promise.all(
@@ -136,6 +150,18 @@ export async function persistAnalysisReport(
       return updateSubmissionAnalysis(sub.id, sc.aiScore, supabase)
     }),
   )
+
+  for (const sub of submissions) {
+    const inserted = insertedByStudentId.get(sub.studentId)
+    const sc = report.scores[sub.studentName]
+    if (!sc || !inserted?.id) continue
+    report.scores[sub.studentName] = {
+      ...sc,
+      analysisScoreId: inserted.id,
+      studentId: sub.studentId,
+      submissionId: sub.id,
+    }
+  }
 
   return {
     ...report,
