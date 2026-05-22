@@ -43,7 +43,10 @@ function pythonEnv(): NodeJS.ProcessEnv {
  * Runs Gemini web plagiarism scan via Python subprocess.
  * Requires GEMINI_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY) in server env.
  */
-export function runPlagiarismGeminiScan(text: string): Promise<PlagiarismWebReport> {
+export function runPlagiarismGeminiScan(
+  text: string,
+  submissionId?: string,
+): Promise<PlagiarismWebReport> {
   return new Promise((resolve, reject) => {
     const trimmed = (text ?? "").trim()
     if (!trimmed) {
@@ -122,7 +125,12 @@ export function runPlagiarismGeminiScan(text: string): Promise<PlagiarismWebRepo
       }
     })
 
-    child.stdin.write(JSON.stringify({ text: trimmed }))
+    child.stdin.write(
+      JSON.stringify({
+        text: trimmed,
+        ...(submissionId ? { submission_id: submissionId } : {}),
+      }),
+    )
     child.stdin.end()
   })
 }
