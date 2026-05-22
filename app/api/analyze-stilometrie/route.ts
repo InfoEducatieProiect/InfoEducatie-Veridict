@@ -133,9 +133,14 @@ export async function POST(request: Request) {
     )
 
     return NextResponse.json({
+      /** Lucrarea curentă → `analysis_scores` */
       metrics: result.metrics,
       deviation: result.deviation,
+      /** Amprenta istorică → `student_baselines` (strict read-only la analiză) */
+      historic_baseline: result.historic_baseline,
       baseline_used: result.baseline_used,
+      /** true = lipsă rând în `student_baselines`; nu implică scriere în DB */
+      baseline_initialized: result.baseline_initialized,
       verdict: result.verdict,
       analysis_score_id: result.analysis_score_id,
       student_id: result.student_id,

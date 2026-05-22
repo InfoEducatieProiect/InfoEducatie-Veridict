@@ -204,6 +204,7 @@ export async function loadAnalysisReportForAssignment(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 4)
 
+    // Curent = analysis_scores (această lucrare); istoric = student_baselines (profil elev).
     const rawMetrics = rawMetricsFromScoreRow(row)
     const rawBaseline = rawBaselineFromRow(baselinesByStudentId[row.student_id])
 

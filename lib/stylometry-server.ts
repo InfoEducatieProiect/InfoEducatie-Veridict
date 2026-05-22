@@ -22,9 +22,15 @@ const METRIC_KEYS = ["ttr", "asl", "verbs", "adjs", "punct"] as const
 type StylometryMetricKey = (typeof METRIC_KEYS)[number]
 
 export interface StylometryAnalysisResult {
+  /** Metricile lucrării curente — salvate în `analysis_scores`. */
   metrics: StylometryMetrics
-  deviation: number
+  /** Amprenta istorică de referință — citită din `student_baselines`. */
+  historic_baseline: StylometryMetrics
+  /** Alias pentru compatibilitate UI (`baseline_used`). */
   baseline_used: StylometryMetrics
+  deviation: number
+  /** True dacă nu există încă rând în `student_baselines` (doar citire; fără scriere la analiză). */
+  baseline_initialized: boolean
   verdict: StylometryVerdict
   analysis_score_id: string
   student_id: string
@@ -62,76 +68,54 @@ function metricsFromRow(
   }
 }
 
-function averageMetrics(rows: StylometryMetrics[]): StylometryMetrics | null {
-  if (!rows.length) return null
-  const sum = { ttr: 0, asl: 0, verbs: 0, adjs: 0, punct: 0 }
-  for (const row of rows) {
-    for (const k of METRIC_KEYS) {
-      sum[k] += row[k]
-    }
-  }
-  const n = rows.length
-  return {
-    ttr: round2(sum.ttr / n),
-    asl: round2(sum.asl / n),
-    verbs: round2(sum.verbs / n),
-    adjs: round2(sum.adjs / n),
-    punct: round2(sum.punct / n),
-  }
-}
-
-function consolidateBaseline(
-  existing: StylometryMetrics | null,
-  current: StylometryMetrics,
-): StylometryMetrics {
-  if (!existing) return current
-  return {
-    ttr: round2((existing.ttr + current.ttr) / 2),
-    asl: round2((existing.asl + current.asl) / 2),
-    verbs: round2((existing.verbs + current.verbs) / 2),
-    adjs: round2((existing.adjs + current.adjs) / 2),
-    punct: round2((existing.punct + current.punct) / 2),
-  }
-}
-
-async function resolveBaselineForStudent(
+/**
+ * Citește amprenta istorică globală — EXCLUSIV din `student_baselines`.
+ * Nu folosește `analysis_scores` ca sursă de baseline.
+ */
+export async function loadHistoricBaselineFromDb(
   studentId: string,
   supabase: SupabaseClient,
 ): Promise<StylometryMetrics | null> {
-  const { data: baselineRow, error: baselineErr } = await supabase
+  const { data, error } = await supabase
     .from("student_baselines")
     .select("ttr, asl, verbs, adjs, punct")
     .eq("student_id", studentId)
     .maybeSingle()
 
-  if (baselineErr) throw baselineErr
+  if (error) throw error
+  return metricsFromRow(data as StudentBaseline | null)
+}
 
-  const fromBaselines = metricsFromRow(baselineRow as StudentBaseline | null)
-  if (fromBaselines) return fromBaselines
-
-  const { data: historyRows, error: histErr } = await supabase
+/**
+ * Persistă metricile lucrării curente + deviația în `analysis_scores` pentru acest submission.
+ */
+async function persistCurrentWorkToAnalysisScore(
+  analysisScoreId: string,
+  current: StylometryMetrics,
+  deviation: number,
+  supabase: SupabaseClient,
+): Promise<void> {
+  const { error } = await supabase
     .from("analysis_scores")
-    .select("ttr, asl, verbs, adjs, punct")
-    .eq("student_id", studentId)
-    .not("stilometric", "is", null)
-    .not("ttr", "is", null)
+    .update({
+      ttr: current.ttr,
+      asl: current.asl,
+      verbs: current.verbs,
+      adjs: current.adjs,
+      punct: current.punct,
+      stilometric: deviation,
+    })
+    .eq("id", analysisScoreId)
 
-  if (histErr) throw histErr
-
-  const historical = (historyRows ?? [])
-    .map((r) => metricsFromRow(r as Partial<Record<StylometryMetricKey, number>>))
-    .filter((m): m is StylometryMetrics => m !== null)
-
-  return averageMetrics(historical)
+  if (error) throw error
 }
 
 function runStylometryPython(
   text: string,
-  baseline: StylometryMetrics | null,
+  historicBaseline: StylometryMetrics | null,
 ): Promise<{
   metrics: StylometryMetrics
   deviation: number
-  baseline_used: StylometryMetrics
 }> {
   return new Promise((resolve, reject) => {
     const trimmed = (text ?? "").trim()
@@ -183,18 +167,12 @@ function runStylometryPython(
         const metrics = metricsFromRow(
           parsed.metrics as Partial<Record<StylometryMetricKey, number>>,
         )
-        const baselineUsed = metricsFromRow(
-          parsed.baseline_used as Partial<Record<StylometryMetricKey, number>>,
-        )
-        if (!metrics || !baselineUsed) {
+        if (!metrics) {
           reject(new Error("Invalid stylometry JSON from Python"))
           return
         }
-        resolve({
-          metrics,
-          deviation: round2(Number(parsed.deviation ?? 0)),
-          baseline_used: baselineUsed,
-        })
+        const deviation = round2(Number(parsed.deviation ?? 0))
+        resolve({ metrics, deviation })
       } catch (e) {
         reject(
           new Error(
@@ -207,7 +185,7 @@ function runStylometryPython(
     child.stdin.write(
       JSON.stringify({
         text: trimmed,
-        baseline: baseline ?? null,
+        baseline: historicBaseline,
       }),
     )
     child.stdin.end()
@@ -215,7 +193,10 @@ function runStylometryPython(
 }
 
 /**
- * Runs spaCy stylometry, persists to analysis_scores + student_baselines.
+ * Flux corect:
+ * 1. Citește baseline din `student_baselines` (read-only; sau null)
+ * 2. Python extrage metricile textului curent + deviație față de baseline
+ * 3. Scrie metricile curente + `stilometric` în `analysis_scores` (singura scriere)
  */
 export async function runStylometryAnalysis(
   analysisScoreId: string,
@@ -226,54 +207,27 @@ export async function runStylometryAnalysis(
 ): Promise<StylometryAnalysisResult> {
   const supabase = supabaseClient ?? (await createClient())
 
-  const baselineInput = await resolveBaselineForStudent(studentId, supabase)
-  const pythonOut = await runStylometryPython(text, baselineInput)
+  const historicBaseline = await loadHistoricBaselineFromDb(studentId, supabase)
+  const pythonOut = await runStylometryPython(text, historicBaseline)
 
-  const { error: scoreErr } = await supabase
-    .from("analysis_scores")
-    .update({
-      ttr: pythonOut.metrics.ttr,
-      asl: pythonOut.metrics.asl,
-      verbs: pythonOut.metrics.verbs,
-      adjs: pythonOut.metrics.adjs,
-      punct: pythonOut.metrics.punct,
-      stilometric: pythonOut.deviation,
-    })
-    .eq("id", analysisScoreId)
+  const referenceBaseline: StylometryMetrics =
+    historicBaseline ?? { ...pythonOut.metrics }
+  const deviation = pythonOut.deviation
 
-  if (scoreErr) throw scoreErr
-
-  const { data: existingBaseline } = await supabase
-    .from("student_baselines")
-    .select("ttr, asl, verbs, adjs, punct")
-    .eq("student_id", studentId)
-    .maybeSingle()
-
-  const consolidated = consolidateBaseline(
-    metricsFromRow(existingBaseline as StudentBaseline | null),
+  await persistCurrentWorkToAnalysisScore(
+    analysisScoreId,
     pythonOut.metrics,
+    deviation,
+    supabase,
   )
-
-  const { error: upsertErr } = await supabase.from("student_baselines").upsert(
-    {
-      student_id: studentId,
-      ttr: consolidated.ttr,
-      asl: consolidated.asl,
-      verbs: consolidated.verbs,
-      adjs: consolidated.adjs,
-      punct: consolidated.punct,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "student_id" },
-  )
-
-  if (upsertErr) throw upsertErr
 
   return {
     metrics: pythonOut.metrics,
-    deviation: pythonOut.deviation,
-    baseline_used: pythonOut.baseline_used,
-    verdict: buildStylometryVerdict(pythonOut.deviation),
+    historic_baseline: referenceBaseline,
+    baseline_used: referenceBaseline,
+    deviation,
+    baseline_initialized: historicBaseline == null,
+    verdict: buildStylometryVerdict(deviation),
     analysis_score_id: analysisScoreId,
     student_id: studentId,
     submission_id: submissionId,

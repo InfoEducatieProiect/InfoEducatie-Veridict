@@ -57,9 +57,20 @@ function toChartRows(
 ) {
   return AXIS_CONFIG.map((axis) => ({
     subject: axis.label,
-    historic: baseline[axis.key],
-    current: current[axis.key],
+    Istoric_Elev: baseline[axis.key],
+    Lucrare_Curenta: current[axis.key],
   }))
+}
+
+function tooltipSeriesLabel(dataKey: string, seriesName?: string): string {
+  if (
+    dataKey === "Istoric_Elev" ||
+    seriesName === "Istoric" ||
+    seriesName === "Amprenta Istorică"
+  ) {
+    return "Istoric"
+  }
+  return "Lucrarea Curentă"
 }
 
 function radarDomain(
@@ -133,28 +144,31 @@ export default function RadarStilometricTab({
           text,
         }),
       })
-      const data = (await res.json()) as {
-        metrics?: StylometryMetrics
-        baseline_used?: StylometryMetrics
-        deviation?: number
-        verdict?: StylometryVerdict
-        error?: string
-      }
-      if (!res.ok) {
-        throw new Error(data.error ?? "Analiza stilometrică a eșuat")
-      }
-      if (!data.metrics || !data.baseline_used || data.deviation == null) {
-        throw new Error("Răspuns invalid de la server")
-      }
-      const v =
-        data.verdict ?? buildStylometryVerdict(data.deviation)
-      setMetrics(data.metrics)
-      setBaseline(data.baseline_used)
+        const data = (await res.json()) as {
+          metrics?: StylometryMetrics
+          historic_baseline?: StylometryMetrics
+          baseline_used?: StylometryMetrics
+          deviation?: number
+          verdict?: StylometryVerdict
+          error?: string
+        }
+        if (!res.ok) {
+          throw new Error(data.error ?? "Analiza stilometrică a eșuat")
+        }
+        const historicRef =
+          data.historic_baseline ?? data.baseline_used
+        if (!data.metrics || !historicRef || data.deviation == null) {
+          throw new Error("Răspuns invalid de la server")
+        }
+        const v =
+          data.verdict ?? buildStylometryVerdict(data.deviation)
+        setMetrics(data.metrics)
+        setBaseline(historicRef)
       setDeviation(data.deviation)
       setVerdict(v)
       onAnalysisComplete?.({
         metrics: data.metrics,
-        baseline_used: data.baseline_used,
+        baseline_used: historicRef,
         deviation: data.deviation,
         verdict: v,
       })
@@ -201,7 +215,7 @@ export default function RadarStilometricTab({
             }}
           >
             <Zap size={14} className={loading ? "animate-pulse" : ""} aria-hidden="true" />
-            {loading ? "Se calculează…" : "⚡ Calculează Raport Stilometric"}
+            {loading ? "Se calculează…" : "⚡ Recalculează Raport Stilometric"}
           </button>
         </div>
 
@@ -274,14 +288,22 @@ export default function RadarStilometricTab({
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(value: number, name: string) => [
-                    `${Number(value).toFixed(1)}`,
-                    name === "historic" ? "Amprenta Istorică" : "Lucrarea Curentă",
-                  ]}
+                  formatter={(value: number, _name: string, item) => {
+                    const payload = item?.payload as Record<string, unknown> | undefined
+                    const dataKey = String(item?.dataKey ?? "")
+                    const seriesName = String(item?.name ?? "")
+                    const label = tooltipSeriesLabel(dataKey, seriesName)
+                    const raw =
+                      dataKey === "Istoric_Elev"
+                        ? payload?.Istoric_Elev
+                        : payload?.Lucrare_Curenta
+                    const num = typeof raw === "number" ? raw : Number(value)
+                    return [`${num.toFixed(1)}`, label]
+                  }}
                 />
                 <RechartsRadar
-                  name="Amprenta Istorică"
-                  dataKey="historic"
+                  name="Istoric"
+                  dataKey="Istoric_Elev"
                   stroke="#3b82f6"
                   fill="#3b82f6"
                   fillOpacity={0.35}
@@ -289,18 +311,13 @@ export default function RadarStilometricTab({
                 />
                 <RechartsRadar
                   name="Lucrarea Curentă"
-                  dataKey="current"
+                  dataKey="Lucrare_Curenta"
                   stroke="#f97316"
                   fill="#f97316"
                   fillOpacity={0.4}
                   strokeWidth={2.5}
                 />
-                <Legend
-                  wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-                  formatter={(value) =>
-                    value === "Amprenta Istorică" ? value : "Lucrarea Curentă"
-                  }
-                />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
               </RadarChart>
             </ResponsiveContainer>
           </div>

@@ -7,7 +7,7 @@ import {
   ChevronRight, FileText, Clock, CheckCircle2, Cpu, ArrowLeft,
   AlertTriangle, Network, BookOpen, Eye, Filter,
   ChevronLeft, Upload, Search, ChevronDown, Paperclip, ExternalLink,
-  BarChart3,
+  BarChart3, RefreshCw, Loader2,
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -20,6 +20,43 @@ import {
   loadAnalysisReportForAssignment,
 } from "@/lib/analysis-report"
 import { resolveForensicScoreIds } from "@/lib/forensic-score-ids"
+import type { StylometryMetrics } from "@/lib/stylometry-types"
+
+function stilometricLabelFromDeviation(deviation: number): StudentScore["stilometric"] {
+  return deviation >= 38 ? "Abatere Stilistica" : "Stil Consistent"
+}
+
+function markStylometryAnalysisError(score: StudentScore): StudentScore {
+  return { ...score, stilometric: "Eroare analiză" }
+}
+
+function mergeStylometryIntoScore(
+  score: StudentScore,
+  payload: {
+    metrics: StylometryMetrics
+    baseline_used: StylometryMetrics
+    deviation: number
+  },
+): StudentScore {
+  const { metrics, baseline_used, deviation } = payload
+  return {
+    ...score,
+    stylometryMetrics: metrics,
+    stylometryBaseline: baseline_used,
+    stilometricDeviation: deviation,
+    stilometric: stilometricLabelFromDeviation(deviation),
+    lexicalDiversity: metrics.ttr,
+    avgSentenceLength: metrics.asl,
+    verbDensity: metrics.verbs,
+    adjectiveDensity: metrics.adjs,
+    punctuationUsage: metrics.punct,
+    historicLexicalDiversity: baseline_used.ttr,
+    historicAvgSentenceLength: baseline_used.asl,
+    historicVerbDensity: baseline_used.verbs,
+    historicAdjectiveDensity: baseline_used.adjs,
+    historicPunctuationUsage: baseline_used.punct,
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +94,7 @@ interface Submission {
 interface StudentScore {
   aiScore: number
   similarity: number
-  stilometric: "Stil Consistent" | "Abatere Stilistica"
+  stilometric: "Stil Consistent" | "Abatere Stilistica" | "Eroare analiză"
   lexicalDiversity: number
   avgSentenceLength: number
   verbDensity: number
@@ -880,6 +917,8 @@ function AssignmentDetail({
   )
   
   const [isAnalysing, setIsAnalysing] = useState(false)
+  const [isBulkAnalysing, setIsBulkAnalysing] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
   const [previewing, setPreviewing] = useState<{ studentName: string; fileName: string; text: string } | null>(null)
   const [page, setPage] = useState(0)
   const [chartFilter, setChartFilter] = useState<string | null>(null)
@@ -959,7 +998,7 @@ function AssignmentDetail({
     setIsAnalysing(true)
   }
 
-  const runAiAnalysis = async () => {
+  const runAiAnalysis = async (): Promise<AnalysisReport | null> => {
     try {
       const res = await fetch("/api/analyze-ai", {
         method: "POST",
@@ -968,12 +1007,132 @@ function AssignmentDetail({
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; report?: AnalysisReport }
       if (!res.ok) throw new Error(data.error || res.statusText)
-      const report = data.report
-      if (!report) throw new Error("Missing report in response")
-      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: report }))
+      const nextReport = data.report
+      if (!nextReport) throw new Error("Missing report in response")
+      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: nextReport }))
       mutate(`submissions-${assignment.id}`)
+      return nextReport
     } catch (err) {
       console.error("[Veridict] Analysis failed:", err)
+      return null
+    }
+  }
+
+  const runBulkAnalysis = async () => {
+    if (assnSubs.length === 0 || isAnalysing || isBulkAnalysing) return
+
+    setIsBulkAnalysing(true)
+    setBulkProgress({ done: 0, total: assnSubs.length })
+
+    try {
+      let currentReport =
+        (await runAiAnalysis()) ??
+        analysisReports[assignment.id] ??
+        (await loadAnalysisReportForAssignment(assignment.id))
+
+      if (!currentReport) {
+        throw new Error("Nu s-a putut genera raportul de analiză")
+      }
+
+      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: currentReport! }))
+      const updatedScores: Record<string, StudentScore> = {
+        ...currentReport.scores,
+      }
+
+      let done = 0
+      for (const sub of assnSubs) {
+        const text = (sub.text ?? "").trim()
+        const rScore = updatedScores[sub.studentName]
+        if (!rScore || !text) {
+          done += 1
+          setBulkProgress({ done, total: assnSubs.length })
+          continue
+        }
+
+        const { analysisScoreId, studentId } = resolveForensicScoreIds(rScore, {
+          submissionId: sub.id,
+          studentId: sub.student_id,
+        })
+
+        if (!analysisScoreId || !studentId) {
+          console.error("[Veridict] Bulk skip — missing IDs", {
+            studentName: sub.studentName,
+            score: rScore,
+          })
+          done += 1
+          setBulkProgress({ done, total: assnSubs.length })
+          continue
+        }
+
+        try {
+          const res = await fetch("/api/analyze-stilometrie", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              assignment_id: assignment.id,
+              submission_id: sub.id,
+              analysis_score_id: analysisScoreId,
+              student_id: studentId,
+              text,
+            }),
+          })
+          const data = (await res.json()) as {
+            metrics?: StylometryMetrics
+            historic_baseline?: StylometryMetrics
+            baseline_used?: StylometryMetrics
+            deviation?: number
+            error?: string
+          }
+          const historicRef =
+            data.historic_baseline ?? data.baseline_used
+          if (
+            res.ok &&
+            data.metrics &&
+            historicRef &&
+            data.deviation != null
+          ) {
+            updatedScores[sub.studentName] = mergeStylometryIntoScore(rScore, {
+              metrics: data.metrics,
+              baseline_used: historicRef,
+              deviation: data.deviation,
+            })
+          } else {
+            const errMsg =
+              data.error ??
+              (res.ok
+                ? "Răspuns stilometrie incomplet"
+                : res.statusText || `HTTP ${res.status}`)
+            console.error(
+              `[Veridict] Stylometry failed for ${sub.studentName}:`,
+              errMsg,
+            )
+            updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
+          }
+        } catch (err) {
+          console.error(
+            `[Veridict] Bulk stylometry error for ${sub.studentName}:`,
+            err,
+          )
+          updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
+        }
+
+        done += 1
+        setBulkProgress({ done, total: assnSubs.length })
+        setAnalysisReports((prev) => ({
+          ...prev,
+          [assignment.id]: {
+            ...currentReport!,
+            scores: { ...updatedScores },
+          },
+        }))
+      }
+
+      setShowReport(true)
+    } catch (err) {
+      console.error("[Veridict] Bulk analysis failed:", err)
+    } finally {
+      setIsBulkAnalysing(false)
+      setBulkProgress({ done: 0, total: 0 })
     }
   }
 
@@ -1077,6 +1236,21 @@ function AssignmentDetail({
       <div className="relative overflow-hidden rounded-2xl border shadow-sm" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
         <AnimatePresence>
           {isAnalysing && <AiAnalysisOverlay onDone={handleAnalysisDone} />}
+          {isBulkAnalysing && (
+            <div
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/75 backdrop-blur-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 size={32} className="animate-spin" style={{ color: "var(--dash-navy)" }} />
+              <p className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
+                Relansează analiza pentru clasă…
+              </p>
+              <p className="text-xs" style={{ color: "var(--dash-muted)" }}>
+                {bulkProgress.done} / {bulkProgress.total} elevi procesați
+              </p>
+            </div>
+          )}
         </AnimatePresence>
 
         <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "var(--dash-border)" }}>
@@ -1093,14 +1267,49 @@ function AssignmentDetail({
               )}
             </p>
           </div>
-          <div className="relative group/btn">
-            <button onClick={handleAiClick} disabled={isAnalysing || assnSubs.length === 0}
+          <div className="flex flex-wrap items-center gap-2">
+            {hasReport && (
+              <button
+                type="button"
+                onClick={() => void runBulkAnalysis()}
+                disabled={
+                  isAnalysing ||
+                  isBulkAnalysing ||
+                  assnSubs.length === 0
+                }
+                className="flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
+                style={{
+                  borderColor: "var(--dash-border)",
+                  color: "var(--dash-navy)",
+                  background: "rgba(59,130,246,0.06)",
+                }}
+                title="Reanalizează AI + stilometrie spaCy pentru toți elevii din tabel"
+              >
+                {isBulkAnalysing ? (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw size={14} aria-hidden="true" />
+                )}
+                {isBulkAnalysing
+                  ? `Relansare… ${bulkProgress.done}/${bulkProgress.total}`
+                  : "Relansează Analiza AI Totală"}
+              </button>
+            )}
+            <button
+              onClick={handleAiClick}
+              disabled={isAnalysing || isBulkAnalysing || assnSubs.length === 0}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               style={{ background: hasReport ? (showReport ? "#10B981" : "var(--dash-navy)") : "var(--dash-navy)" }}
               title={assnSubs.length === 0 ? "Nicio predare disponibila pentru analiza" : undefined}
             >
               <Brain size={14} aria-hidden="true" />
-              {isAnalysing ? "Analiza in desfasurare..." : hasReport ? showReport ? "Ascunde Raport" : "Afiseaza Raport" : "Lanseaza Analiza AI"}
+              {isAnalysing
+                ? "Analiza in desfasurare..."
+                : hasReport
+                  ? showReport
+                    ? "Ascunde Raport"
+                    : "Afiseaza Raport"
+                  : "Lanseaza Analiza AI"}
             </button>
           </div>
         </div>
@@ -1164,9 +1373,17 @@ function AssignmentDetail({
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                                rScore.stilometric === "Stil Consistent" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
+                                rScore.stilometric === "Eroare analiză"
+                                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                                  : rScore.stilometric === "Stil Consistent"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-red-50 text-red-700 border-red-200"
                               }`}>
-                                {rScore.stilometric === "Stil Consistent" ? "OK" : "Suspect"}
+                                {rScore.stilometric === "Eroare analiză"
+                                  ? "Eroare analiză"
+                                  : rScore.stilometric === "Stil Consistent"
+                                    ? "OK"
+                                    : "Suspect"}
                               </span>
                             </td>
                           </>
