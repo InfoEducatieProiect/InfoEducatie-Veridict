@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { Radar, Zap } from "lucide-react"
 import {
@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts"
+import { fetchStylometryScan } from "@/lib/stylometry-client"
 import {
   buildStylometryVerdict,
   type StylometryMetrics,
@@ -38,6 +39,8 @@ export interface RadarStilometricTabProps {
   initialBaseline?: StylometryMetrics | null
   initialDeviation?: number | null
   initialVerdict?: StylometryVerdict | null
+  /** When true, runs spaCy scan on mount if metrics are not already loaded. */
+  autoRunOnMount?: boolean
   onAnalysisComplete?: (payload: {
     metrics: StylometryMetrics
     baseline_used: StylometryMetrics
@@ -93,6 +96,7 @@ export default function RadarStilometricTab({
   initialBaseline,
   initialDeviation,
   initialVerdict,
+  autoRunOnMount = false,
   onAnalysisComplete,
 }: RadarStilometricTabProps) {
   const seeded = hasMetrics(initialMetrics)
@@ -118,6 +122,7 @@ export default function RadarStilometricTab({
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const autoRunAttempted = useRef(false)
 
   const chartData = useMemo(() => {
     if (!metrics || !baseline) return []
@@ -129,49 +134,42 @@ export default function RadarStilometricTab({
     return radarDomain(baseline, metrics)
   }, [metrics, baseline])
 
+  const applyScanResult = useCallback(
+    (result: {
+      metrics: StylometryMetrics
+      baseline_used: StylometryMetrics
+      deviation: number
+      verdict: StylometryVerdict
+    }) => {
+      setMetrics(result.metrics)
+      setBaseline(result.baseline_used)
+      setDeviation(result.deviation)
+      setVerdict(result.verdict)
+      onAnalysisComplete?.(result)
+    },
+    [onAnalysisComplete],
+  )
+
   const runAnalysis = useCallback(async () => {
+    if (!text.trim() || !analysisScoreId || !studentId) {
+      setError("Lipsesc textul sau identificatorii analizei.")
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/analyze-stilometrie", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          assignment_id: assignmentId,
-          submission_id: submissionId,
-          analysis_score_id: analysisScoreId,
-          student_id: studentId,
-          text,
-        }),
+      const result = await fetchStylometryScan({
+        assignmentId,
+        submissionId,
+        analysisScoreId,
+        studentId,
+        text,
       })
-        const data = (await res.json()) as {
-          metrics?: StylometryMetrics
-          historic_baseline?: StylometryMetrics
-          baseline_used?: StylometryMetrics
-          deviation?: number
-          verdict?: StylometryVerdict
-          error?: string
-        }
-        if (!res.ok) {
-          throw new Error(data.error ?? "Analiza stilometrică a eșuat")
-        }
-        const historicRef =
-          data.historic_baseline ?? data.baseline_used
-        if (!data.metrics || !historicRef || data.deviation == null) {
-          throw new Error("Răspuns invalid de la server")
-        }
-        const v =
-          data.verdict ?? buildStylometryVerdict(data.deviation)
-        setMetrics(data.metrics)
-        setBaseline(historicRef)
-      setDeviation(data.deviation)
-      setVerdict(v)
-      onAnalysisComplete?.({
-        metrics: data.metrics,
-        baseline_used: historicRef,
-        deviation: data.deviation,
-        verdict: v,
-      })
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      applyScanResult(result)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare la analiză")
     } finally {
@@ -183,7 +181,42 @@ export default function RadarStilometricTab({
     analysisScoreId,
     studentId,
     text,
-    onAnalysisComplete,
+    applyScanResult,
+  ])
+
+  useEffect(() => {
+    if (!hasMetrics(initialMetrics)) return
+    setMetrics(initialMetrics!)
+    setBaseline(
+      initialBaseline && hasMetrics(initialBaseline)
+        ? initialBaseline
+        : initialMetrics!,
+    )
+    setDeviation(initialDeviation ?? 0)
+    setVerdict(
+      initialVerdict ??
+        (initialDeviation != null
+          ? buildStylometryVerdict(initialDeviation)
+          : buildStylometryVerdict(0)),
+    )
+  }, [initialMetrics, initialBaseline, initialDeviation, initialVerdict])
+
+  useEffect(() => {
+    autoRunAttempted.current = false
+  }, [submissionId, analysisScoreId])
+
+  useEffect(() => {
+    if (!autoRunOnMount || hasMetrics(initialMetrics) || autoRunAttempted.current) return
+    if (!text.trim() || !analysisScoreId || !studentId) return
+    autoRunAttempted.current = true
+    void runAnalysis()
+  }, [
+    autoRunOnMount,
+    initialMetrics,
+    text,
+    analysisScoreId,
+    studentId,
+    runAnalysis,
   ])
 
   const showReport = metrics && baseline && deviation != null && verdict
@@ -225,10 +258,9 @@ export default function RadarStilometricTab({
           </p>
         )}
 
-        {!showReport && !loading && (
-          <p className="mt-4 text-xs" style={{ color: "var(--dash-muted)" }}>
-            Apasă butonul pentru a extrage amprenta stilometrică (spaCy) și a o compara cu
-            profilul istoric al elevului.
+        {loading && !showReport && (
+          <p className="mt-4 text-xs font-semibold" style={{ color: "var(--dash-muted)" }}>
+            Se extrage amprenta stilometrică (spaCy)…
           </p>
         )}
       </div>
@@ -322,9 +354,7 @@ export default function RadarStilometricTab({
             </ResponsiveContainer>
           </div>
 
-          <div
-            className="grid grid-cols-1 gap-4 md:grid-cols-5"
-          >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
             {AXIS_CONFIG.map((axis) => (
               <div
                 key={axis.key}

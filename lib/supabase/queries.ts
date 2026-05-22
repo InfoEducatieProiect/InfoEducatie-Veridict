@@ -17,6 +17,17 @@ function isMissingColumnError(error: unknown): boolean {
   )
 }
 
+/** Newest-first for in-memory rows when DB order cannot be relied on. */
+export function sortByCreatedAtDesc<T extends { created_at?: string | null }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort(
+    (a, b) =>
+      new Date(b.created_at ?? 0).getTime() -
+      new Date(a.created_at ?? 0).getTime(),
+  )
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type UserRole = "elev" | "profesor"
@@ -86,6 +97,7 @@ export interface AnalysisRun {
   id: string
   assignment_id: string
   ran_at: string
+  created_at?: string
 }
 
 export interface AnalysisScore {
@@ -359,9 +371,10 @@ export async function createAnalysisRun(
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisRun> {
   const supabase = sb(supabaseClient)
+  const ranAt = new Date().toISOString()
   const { data, error } = await supabase
     .from("analysis_runs")
-    .insert({ assignment_id: assignmentId })
+    .insert({ assignment_id: assignmentId, ran_at: ranAt })
     .select()
     .single()
   
@@ -443,24 +456,26 @@ export async function updateSubmissionAnalysis(
   if (error) throw error
 }
 
-// Get the latest analysis run for an assignment
+// Get the latest analysis run for an assignment (newest first: created_at → ran_at → id)
 export async function getLatestAnalysisRun(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisRun | null> {
   const supabase = sb(supabaseClient)
+  
+  // Sortăm direct după ran_at DESC pentru a aduce mereu cea mai nouă rulare la refresh
   const { data, error } = await supabase
     .from("analysis_runs")
     .select("*")
     .eq("assignment_id", assignmentId)
     .order("ran_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(1)
     .maybeSingle()
-  
+
   if (error) throw error
   return data
 }
-
 // Get analysis scores for a run
 export async function getAnalysisScores(
   runId: string,
@@ -471,9 +486,10 @@ export async function getAnalysisScores(
     .from("analysis_scores")
     .select("*, profiles!analysis_scores_student_id_fkey(display_name)")
     .eq("analysis_run_id", runId)
+    .order("created_at", { ascending: false })
   
   if (error) throw error
-  return (data || []).map(s => ({
+  return sortByCreatedAtDesc(data || []).map(s => ({
     ...s,
     student_name: (s as { profiles?: { display_name: string } }).profiles?.display_name
   }))
@@ -499,9 +515,10 @@ export async function getAnalysisScoresWithPeers(
       )
     `)
     .eq("analysis_run_id", runId)
+    .order("created_at", { ascending: false })
 
   if (!first.error) {
-    return (first.data || []).map((s) => ({
+    return sortByCreatedAtDesc(first.data || []).map((s) => ({
       ...s,
       student_name: (s as { profiles?: { display_name?: string } }).profiles?.display_name,
     }))
@@ -521,36 +538,62 @@ export async function getAnalysisScoresWithPeers(
       )
     `)
     .eq("analysis_run_id", runId)
+    .order("created_at", { ascending: false })
   if (second.error) throw second.error
-  return (second.data || []).map((s) => ({
+  return sortByCreatedAtDesc(second.data || []).map((s) => ({
     ...s,
     student_name: (s as { profiles?: { display_name?: string } }).profiles?.display_name,
   }))
 }
 
-/** Latest analysis_scores row for a submission (current assignment run). */
+/** Latest analysis_scores row for a submission (newest run + newest row). */
 export async function getAnalysisScoreForSubmission(
   assignmentId: string,
   submissionId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisScore | null> {
   const supabase = sb(supabaseClient)
+
+  const { data, error } = await supabase
+    .from("analysis_scores")
+    .select(
+      "*, profiles!analysis_scores_student_id_fkey(display_name), analysis_runs!inner(assignment_id)",
+    )
+    .eq("submission_id", submissionId)
+    .eq("analysis_runs.assignment_id", assignmentId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!error && data) {
+    return {
+      ...data,
+      student_name: (data as { profiles?: { display_name?: string } }).profiles
+        ?.display_name,
+    }
+  }
+
+  if (error && !isMissingColumnError(error)) throw error
+
+  // Fallback when inner join on analysis_runs is unavailable in schema cache
   const run = await getLatestAnalysisRun(assignmentId, supabase)
   if (!run) return null
 
-  const { data, error } = await supabase
+  const legacy = await supabase
     .from("analysis_scores")
     .select("*, profiles!analysis_scores_student_id_fkey(display_name)")
     .eq("analysis_run_id", run.id)
     .eq("submission_id", submissionId)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle()
 
-  if (error) throw error
-  if (!data) return null
+  if (legacy.error) throw legacy.error
+  if (!legacy.data) return null
   return {
-    ...data,
-    student_name: (data as { profiles?: { display_name?: string } }).profiles
-      ?.display_name,
+    ...legacy.data,
+    student_name: (legacy.data as { profiles?: { display_name?: string } })
+      .profiles?.display_name,
   }
 }
 

@@ -20,7 +20,9 @@ import {
   loadAnalysisReportForAssignment,
 } from "@/lib/analysis-report"
 import { resolveForensicScoreIds } from "@/lib/forensic-score-ids"
-import type { StylometryMetrics } from "@/lib/stylometry-types"
+import { fetchStylometryScan } from "@/lib/stylometry-client"
+import { stylometryMetricsToDbColumns } from "@/lib/stylometry-db-metrics"
+import type { StylometryMetrics, StylometryVerdict } from "@/lib/stylometry-types"
 
 function stilometricLabelFromDeviation(deviation: number): StudentScore["stilometric"] {
   return deviation >= 38 ? "Abatere Stilistica" : "Stil Consistent"
@@ -28,6 +30,85 @@ function stilometricLabelFromDeviation(deviation: number): StudentScore["stilome
 
 function markStylometryAnalysisError(score: StudentScore): StudentScore {
   return { ...score, stilometric: "Eroare analiză" }
+}
+
+type ClassSubmissionRow = {
+  id: string
+  student_id: string
+  studentName: string
+  text: string
+}
+
+/** Runs spaCy stylometry for every submitted student; persists via `/api/analyze-stilometrie`. */
+async function runClassStylometryScan(
+  assignmentId: string,
+  currentReport: AnalysisReport,
+  subs: ClassSubmissionRow[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<AnalysisReport> {
+  const updatedScores: Record<string, StudentScore> = {
+    ...currentReport.scores,
+  }
+  const total = subs.length
+  let done = 0
+
+  for (const sub of subs) {
+    const text = (sub.text ?? "").trim()
+    const rScore = updatedScores[sub.studentName]
+    if (!rScore || !text) {
+      done += 1
+      onProgress?.(done, total)
+      continue
+    }
+
+    const { analysisScoreId, studentId } = resolveForensicScoreIds(rScore, {
+      submissionId: sub.id,
+      studentId: sub.student_id,
+    })
+
+    if (!analysisScoreId || !studentId) {
+      console.error("[Veridict] Stylometry skip — missing IDs", {
+        studentName: sub.studentName,
+      })
+      done += 1
+      onProgress?.(done, total)
+      continue
+    }
+
+    try {
+      const result = await fetchStylometryScan({
+        assignmentId,
+        submissionId: sub.id,
+        analysisScoreId,
+        studentId,
+        text,
+      })
+      if (result.ok) {
+        updatedScores[sub.studentName] = mergeStylometryIntoScore(rScore, {
+          metrics: result.metrics,
+          baseline_used: result.baseline_used,
+          deviation: result.deviation,
+        })
+      } else {
+        console.error(
+          `[Veridict] Stylometry failed for ${sub.studentName}:`,
+          result.error,
+        )
+        updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
+      }
+    } catch (err) {
+      console.error(
+        `[Veridict] Stylometry error for ${sub.studentName}:`,
+        err,
+      )
+      updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
+    }
+
+    done += 1
+    onProgress?.(done, total)
+  }
+
+  return { ...currentReport, scores: updatedScores }
 }
 
 function mergeStylometryIntoScore(
@@ -41,15 +122,18 @@ function mergeStylometryIntoScore(
   const { metrics, baseline_used, deviation } = payload
   return {
     ...score,
-    stylometryMetrics: metrics,
-    stylometryBaseline: baseline_used,
+    stylometryMetrics: metrics,      // <--- Folosit de RadarStilometricTab ca initialMetrics
+    stylometryBaseline: baseline_used, // <--- Folosit de RadarStilometricTab ca initialBaseline
     stilometricDeviation: deviation,
     stilometric: stilometricLabelFromDeviation(deviation),
+    
+    // Proprietățile plate
     lexicalDiversity: metrics.ttr,
     avgSentenceLength: metrics.asl,
     verbDensity: metrics.verbs,
     adjectiveDensity: metrics.adjs,
     punctuationUsage: metrics.punct,
+    
     historicLexicalDiversity: baseline_used.ttr,
     historicAvgSentenceLength: baseline_used.asl,
     historicVerbDensity: baseline_used.verbs,
@@ -57,7 +141,6 @@ function mergeStylometryIntoScore(
     historicPunctuationUsage: baseline_used.punct,
   }
 }
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ClassInfo {
@@ -1034,98 +1117,16 @@ function AssignmentDetail({
         throw new Error("Nu s-a putut genera raportul de analiză")
       }
 
-      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: currentReport! }))
-      const updatedScores: Record<string, StudentScore> = {
-        ...currentReport.scores,
-      }
-
-      let done = 0
-      for (const sub of assnSubs) {
-        const text = (sub.text ?? "").trim()
-        const rScore = updatedScores[sub.studentName]
-        if (!rScore || !text) {
-          done += 1
-          setBulkProgress({ done, total: assnSubs.length })
-          continue
-        }
-
-        const { analysisScoreId, studentId } = resolveForensicScoreIds(rScore, {
-          submissionId: sub.id,
-          studentId: sub.student_id,
-        })
-
-        if (!analysisScoreId || !studentId) {
-          console.error("[Veridict] Bulk skip — missing IDs", {
-            studentName: sub.studentName,
-            score: rScore,
-          })
-          done += 1
-          setBulkProgress({ done, total: assnSubs.length })
-          continue
-        }
-
-        try {
-          const res = await fetch("/api/analyze-stilometrie", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              assignment_id: assignment.id,
-              submission_id: sub.id,
-              analysis_score_id: analysisScoreId,
-              student_id: studentId,
-              text,
-            }),
-          })
-          const data = (await res.json()) as {
-            metrics?: StylometryMetrics
-            historic_baseline?: StylometryMetrics
-            baseline_used?: StylometryMetrics
-            deviation?: number
-            error?: string
-          }
-          const historicRef =
-            data.historic_baseline ?? data.baseline_used
-          if (
-            res.ok &&
-            data.metrics &&
-            historicRef &&
-            data.deviation != null
-          ) {
-            updatedScores[sub.studentName] = mergeStylometryIntoScore(rScore, {
-              metrics: data.metrics,
-              baseline_used: historicRef,
-              deviation: data.deviation,
-            })
-          } else {
-            const errMsg =
-              data.error ??
-              (res.ok
-                ? "Răspuns stilometrie incomplet"
-                : res.statusText || `HTTP ${res.status}`)
-            console.error(
-              `[Veridict] Stylometry failed for ${sub.studentName}:`,
-              errMsg,
-            )
-            updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
-          }
-        } catch (err) {
-          console.error(
-            `[Veridict] Bulk stylometry error for ${sub.studentName}:`,
-            err,
-          )
-          updatedScores[sub.studentName] = markStylometryAnalysisError(rScore)
-        }
-
-        done += 1
-        setBulkProgress({ done, total: assnSubs.length })
-        setAnalysisReports((prev) => ({
-          ...prev,
-          [assignment.id]: {
-            ...currentReport!,
-            scores: { ...updatedScores },
-          },
-        }))
-      }
+      const withStylometry = await runClassStylometryScan(
+        assignment.id,
+        currentReport,
+        assnSubs,
+        (done, total) => setBulkProgress({ done, total }),
+      )
+      setAnalysisReports((prev) => ({
+        ...prev,
+        [assignment.id]: withStylometry,
+      }))
 
       setShowReport(true)
     } catch (err) {
@@ -1138,12 +1139,31 @@ function AssignmentDetail({
 
   const handleAnalysisDone = async () => {
     try {
-      await runAiAnalysis()
+      let nextReport =
+        (await runAiAnalysis()) ??
+        analysisReports[assignment.id] ??
+        (await loadAnalysisReportForAssignment(assignment.id))
+
+      if (nextReport && assnSubs.length > 0) {
+        setBulkProgress({ done: 0, total: assnSubs.length })
+        const withStylometry = await runClassStylometryScan(
+          assignment.id,
+          nextReport,
+          assnSubs,
+          (done, total) => setBulkProgress({ done, total }),
+        )
+        setAnalysisReports((prev) => ({
+          ...prev,
+          [assignment.id]: withStylometry,
+        }))
+      }
+
       setShowReport(true)
     } catch (err) {
       console.error("[Veridict] Analysis failed:", err)
     } finally {
       setIsAnalysing(false)
+      setBulkProgress({ done: 0, total: 0 })
     }
   }
 
@@ -1481,8 +1501,7 @@ function AssignmentDetail({
         )}
       </div>
 
-      {/* Risk Distribution Chart — visible whenever a report exists, regardless of showReport toggle */}
-      {hasReport && report && (
+      {isAnalyzed && report && Object.keys(report.scores).length > 0 && (
         <RiskDistributionChart
           report={report}
           onFilterChange={setChartFilter}
@@ -1490,81 +1509,20 @@ function AssignmentDetail({
         />
       )}
 
-      {/* Sumar Clasa + Global Network — gated behind isAnalyzed */}
-      <AnimatePresence mode="wait">
-        {isAnalyzed && report ? (
-          <motion.div
-            key={`analyzed-${assignment.id}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.4 }}
-            className="flex flex-col gap-6"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>Sumar Clasa</h3>
-            </div>
-
-            {/* KPI Cards */}
-            <KPICards report={report} totalStudents={classStudents.length} submittedCount={assnSubs.length} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="not-analyzed"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col items-center gap-5 rounded-2xl border py-16 px-8 text-center"
-            style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)", borderStyle: "dashed" }}
-          >
-            {/* Illustration */}
-            <div className="relative">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full" style={{ background: "rgba(0,31,63,0.06)" }}>
-                <Cpu size={36} style={{ color: "var(--dash-navy)", opacity: 0.5 }} aria-hidden="true" />
-              </div>
-              <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white" style={{ background: "var(--dash-navy)" }}>
-                <Brain size={12} className="text-white" aria-hidden="true" />
-              </div>
-            </div>
-            {/* Scattered node preview (purely decorative SVG) */}
-            <svg width={220} height={60} aria-hidden="true" className="opacity-20">
-              {[40, 80, 120, 160, 195].map((cx, i) => (
-                <g key={i}>
-                  <circle cx={cx} cy={30 + (i % 2 === 0 ? -10 : 10)} r={8} fill="var(--dash-navy)" />
-                  {i < 4 && (
-                    <line
-                      x1={cx} y1={30 + (i % 2 === 0 ? -10 : 10)}
-                      x2={[40,80,120,160,195][i+1]} y2={30 + ((i+1) % 2 === 0 ? -10 : 10)}
-                      stroke="var(--dash-navy)" strokeWidth={1.5} strokeDasharray="4 2"
-                    />
-                  )}
-                </g>
-              ))}
-            </svg>
-            <div>
-              <p className="text-base font-bold text-balance" style={{ color: "var(--dash-fg)" }}>
-                Analiza nu a fost lansată
-              </p>
-              <p className="mt-1 text-sm max-w-md text-balance" style={{ color: "var(--dash-muted)" }}>
-                Apăsați butonul{" "}
-                <span className="font-semibold" style={{ color: "var(--dash-navy)" }}>&ldquo;Lansează Analiza AI&rdquo;</span>{" "}
-                pentru a procesa lucrările.
-              </p>
-            </div>
-            <button
-              onClick={handleAiClick}
-              disabled={isAnalysing || assnSubs.length === 0}
-              className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
-              style={{ background: "var(--dash-navy)" }}
-              title={assnSubs.length === 0 ? "Nicio predare disponibila pentru analiza" : undefined}
-            >
-              <Brain size={16} aria-hidden="true" />
-              Lanseaza Analiza AI
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isAnalyzed && report && (
+        <motion.div
+          key={`analyzed-${assignment.id}`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col gap-6"
+        >
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>Sumar Clasa</h3>
+          </div>
+          <KPICards report={report} totalStudents={classStudents.length} submittedCount={assnSubs.length} />
+        </motion.div>
+      )}
     </div>
   )
 }
@@ -1889,6 +1847,86 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     setView("detail")
   }
 
+  // MODIFICAT: Funcția a devenit asincronă și salvează corect valorile în baza de date
+  const handleStylometryReport = async (
+    assignmentId: string,
+    studentName: string,
+    payload: {
+      metrics: StylometryMetrics
+      baseline_used: StylometryMetrics
+      deviation: number
+      verdict: StylometryVerdict
+    },
+  ) => {
+    // 1. Actualizăm starea locală a raportului general (UI-ul rămâne corect)
+    setAnalysisReports((prev) => {
+      const current = prev[assignmentId]
+      const existing = current?.scores[studentName]
+      if (!current || !existing) return prev
+      return {
+        ...prev,
+        [assignmentId]: {
+          ...current,
+          scores: {
+            ...current.scores,
+            [studentName]: mergeStylometryIntoScore(existing, {
+              metrics: payload.metrics,
+              baseline_used: payload.baseline_used,
+              deviation: payload.deviation,
+            }),
+          },
+        },
+      }
+    })
+
+    // 2. Actualizăm starea locală a ferestrei de Forensic active
+    setForensicData((fd) =>
+      fd && fd.studentName === studentName && fd.assignmentId === assignmentId
+        ? {
+            ...fd,
+            score: mergeStylometryIntoScore(fd.score, {
+              metrics: payload.metrics,
+              baseline_used: payload.baseline_used,
+              deviation: payload.deviation,
+            }),
+          }
+        : fd,
+    )
+
+    // 3. REMEDIERE CONEXIUNE FAULTY: Sincronizăm forțat baza de date cu datele reale din UI
+    try {
+      const supabase = createClient()
+      
+      // Extragem ID-ul unic al rândului din tabel (folosim salvările din forensicData sau score)
+      const scoreId = forensicData?.analysisScoreId || forensicData?.score?.analysisScoreId || forensicData?.score?.id
+
+      if (!scoreId) {
+        console.warn("[Veridict Sync] Nu s-a putut identifica `analysisScoreId`. Modificările nu s-au salvat în DB.");
+        return
+      }
+
+      const dbCols = stylometryMetricsToDbColumns(payload.metrics)
+
+      const { error } = await supabase
+        .from("analysis_scores")
+        .update({
+          ...dbCols,
+          stilometric: payload.deviation,
+        })
+        .eq("id", scoreId)
+
+      if (error) {
+        console.error("❌ [Supabase Sync Error]:", error.message)
+      } else {
+        console.log(
+          `[Stylometry Debug] handleStylometryReport DB sync OK — verbs raw ${payload.metrics.verbs} → DB ${dbCols.verbs}`,
+        )
+      }
+    } catch (dbErr) {
+      console.error("❌ Problemă critică la rețea/Supabase client în handleStylometryReport:", dbErr)
+    }
+  }
+
   const handlePlagiarismReport = (
     assignmentId: string,
     studentName: string,
@@ -1989,16 +2027,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.25 }}
-              // CRITICAL: overflow-visible + isolation-auto ensures the z-50 "Inapoi la Tabel"
-              // button inside ForensicAnalyzer is NEVER clipped or pointer-blocked by this wrapper.
               className="overflow-visible"
             >
-              {/*
-                BUG #2 FIX: Both AssignmentDetail and ForensicAnalyzer are mounted simultaneously
-                when forensicData is available. CSS display toggling (not unmounting) means the
-                forensic AI report and stylometric state are NEVER destroyed when clicking
-                "Inapoi la Tabel" — raportul AI global reapare instantaneu.
-              */}
               <div style={{ display: forensicData ? "none" : "block" }}>
                 <AssignmentDetail
                   assignment={selectedAssignment}
@@ -2049,6 +2079,13 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                               : Math.round(s.scor * 1000) / 10,
                         })),
                       },
+                    )
+                  }
+                  onStylometryComplete={(payload) =>
+                    handleStylometryReport(
+                      forensicData.assignmentId,
+                      forensicData.studentName,
+                      payload,
                     )
                   }
                 />

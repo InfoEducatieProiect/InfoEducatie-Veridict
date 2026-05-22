@@ -7,10 +7,12 @@ import {
   directedPhrasesFromCaz,
   findCazForUnorderedPair,
   calculateManhattanDeviation,
+  computeRawStylometricPercentages,
   computeStylometricVector,
   resolveHistoricProfile,
   type CazSuspect,
 } from "./analysisEngine"
+import { stylometryMetricsToDbColumns } from "./stylometry-db-metrics"
 import { buildAnalysisReport } from "./analysis-report-build"
 import type { AnalysisReport, SubmissionInput } from "./analysis-report"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -66,6 +68,18 @@ export async function persistAnalysisReport(
     const dbBaseline = baselineFromRow(baselinesByStudentId[sub.studentId])
     const stilometricDev = computedToDbStilometric(sub.studentName, sub.text ?? "", dbBaseline)
 
+    const rawStylo = computeRawStylometricPercentages(sub.text ?? "")
+    const dbStylo = stylometryMetricsToDbColumns(rawStylo)
+
+    console.log("[Stylometry Debug] persistAnalysisReport AI run", {
+      student: sub.studentName,
+      chartScaled: {
+        verbDensity: sc?.verbDensity,
+        adjectiveDensity: sc?.adjectiveDensity,
+      },
+      savedToDb: dbStylo,
+    })
+
     return {
       analysis_run_id: run.id,
       student_id: sub.studentId,
@@ -73,11 +87,11 @@ export async function persistAnalysisReport(
       ai_score: sc?.aiScore ?? 0,
       similarity: sc?.similarity ?? 0,
       stilometric: stilometricDev,
-      ttr: sc?.lexicalDiversity ?? null,
-      asl: sc?.avgSentenceLength ?? null,
-      verbs: sc?.verbDensity ?? null,
-      adjs: sc?.adjectiveDensity ?? null,
-      punct: sc?.punctuationUsage ?? null,
+      ttr: dbStylo.ttr,
+      asl: dbStylo.asl,
+      verbs: dbStylo.verbs,
+      adjs: dbStylo.adjs,
+      punct: dbStylo.punct,
     }
   })
 

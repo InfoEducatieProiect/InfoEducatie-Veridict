@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { StudentBaseline } from "@/lib/supabase/queries"
 import {
+  parseStylometryMetricsFromDb,
+  stylometryMetricsToDbColumns,
+} from "@/lib/stylometry-db-metrics"
+import {
   buildStylometryVerdict,
   type StylometryMetrics,
   type StylometryVerdict,
@@ -59,12 +63,14 @@ function metricsFromRow(
   if (!row) return null
   const hasAny = METRIC_KEYS.some((k) => row[k] != null && Number.isFinite(Number(row[k])))
   if (!hasAny) return null
+  const parsed = parseStylometryMetricsFromDb(row as Record<string, number | null>)
+  if (!parsed) return null
   return {
-    ttr: round2(Number(row.ttr ?? 0)),
-    asl: round2(Number(row.asl ?? 0)),
-    verbs: round2(Number(row.verbs ?? 0)),
-    adjs: round2(Number(row.adjs ?? 0)),
-    punct: round2(Number(row.punct ?? 0)),
+    ttr: round2(parsed.ttr),
+    asl: round2(parsed.asl),
+    verbs: round2(parsed.verbs),
+    adjs: round2(parsed.adjs),
+    punct: round2(parsed.punct),
   }
 }
 
@@ -94,20 +100,47 @@ async function persistCurrentWorkToAnalysisScore(
   current: StylometryMetrics,
   deviation: number,
   supabase: SupabaseClient,
+  submissionId?: string, // Parametru nou pentru Planul B
 ): Promise<void> {
-  const { error } = await supabase
-    .from("analysis_scores")
-    .update({
-      ttr: current.ttr,
-      asl: current.asl,
-      verbs: current.verbs,
-      adjs: current.adjs,
-      punct: current.punct,
-      stilometric: deviation,
-    })
-    .eq("id", analysisScoreId)
+  const dbCols = stylometryMetricsToDbColumns(current)
 
-  if (error) throw error
+  // 1. PLAN A: Încercăm update-ul clasic după analysisScoreId
+  if (analysisScoreId && analysisScoreId !== "undefined") {
+    const { data, error } = await supabase
+      .from("analysis_scores")
+      .update({
+        ...dbCols,
+        stilometric: deviation,
+      })
+      .eq("id", analysisScoreId)
+      .select()
+
+    // Dacă s-a făcut update cu succes pe rândul căutat, ne oprim aici
+    if (!error && data && data.length > 0) return
+  }
+
+  // 2. PLAN B (Fallback): Dacă rândul n-a fost găsit după ID, căutăm după submission_id
+  if (submissionId) {
+    const { data: latestRows } = await supabase
+      .from("analysis_scores")
+      .select("id")
+      .eq("submission_id", submissionId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (latestRows && latestRows.length > 0) {
+      const { error } = await supabase
+        .from("analysis_scores")
+        .update({
+          ...dbCols,
+          stilometric: deviation,
+        })
+        .eq("id", latestRows[0].id)
+      
+      if (error) throw error
+      return
+    }
+  }
 }
 
 function runStylometryPython(
@@ -214,11 +247,13 @@ export async function runStylometryAnalysis(
     historicBaseline ?? { ...pythonOut.metrics }
   const deviation = pythonOut.deviation
 
+  // Aici am adăugat submissionId la finalul apelului ca să funcționeze Planul B
   await persistCurrentWorkToAnalysisScore(
     analysisScoreId,
     pythonOut.metrics,
     deviation,
     supabase,
+    submissionId,
   )
 
   return {

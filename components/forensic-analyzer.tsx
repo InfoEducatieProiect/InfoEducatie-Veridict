@@ -8,7 +8,11 @@ import {
 } from "lucide-react"
 import type { StudentScore } from "@/lib/assignment-store"
 import RadarStilometricTab from "@/components/RadarStilometricTab"
-import { buildStylometryVerdict } from "@/lib/stylometry-types"
+import {
+  buildStylometryVerdict,
+  type StylometryMetrics,
+  type StylometryVerdict,
+} from "@/lib/stylometry-types"
 import { BALTAGUL_TEXTS } from "@/lib/assignment-store"
 import {
   getSimilarPhrases,
@@ -35,6 +39,13 @@ interface ForensicAnalyzerProps {
   integrityGraphNodes?: string[]
   /** Called when a new web plagiarism report is persisted */
   onPlagiarismReport?: (report: RaportPlagiatWeb) => void
+  /** Called when stylometry scan completes (DB write via API + parent state sync) */
+  onStylometryComplete?: (payload: {
+    metrics: StylometryMetrics
+    baseline_used: StylometryMetrics
+    deviation: number
+    verdict: StylometryVerdict
+  }) => void
   analysisScoreId: string
   studentId: string
 }
@@ -515,9 +526,6 @@ function LocalSimilarityGraph({
             <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
               Graf de Similaritate Local
             </h4>
-            <span className="ml-auto text-xs" style={{ color: "var(--dash-muted)" }}>
-              Apasati pe o muchie pentru comparatie duala
-            </span>
           </div>
           <div className="flex justify-center overflow-x-auto">
             <svg width="560" height="360" aria-label={`Graf de similaritate pentru ${studentName}`}>
@@ -1546,19 +1554,12 @@ function GlobalIntegrityGraph({
       className="w-full max-w-7xl mx-auto rounded-2xl border p-8 min-h-[750px] lg:min-h-[850px]"
       style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}
     >
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <Globe size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
         <h3 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
           Graful de Integritate Global
         </h3>
-        <span className="ml-auto text-xs" style={{ color: "var(--dash-muted)" }}>
-          Linii = similaritate &gt;50% | Noduri fara conexiuni = elevi curati
-        </span>
       </div>
-
-      <p className="mb-6 text-[11px]" style={{ color: "var(--dash-muted)" }}>
-        Click pe un nod pentru a deschide raportul forensic al elevului respectiv.
-      </p>
 
       <div className="overflow-x-auto flex justify-center">
         <svg
@@ -1734,6 +1735,7 @@ export default function ForensicAnalyzer({
   integrityGraphEdges,
   integrityGraphNodes,
   onPlagiarismReport,
+  onStylometryComplete,
 }: ForensicAnalyzerProps) {
   const [activeTab, setActiveTab] = useState<TabId>("graph")
 
@@ -1844,6 +1846,8 @@ export default function ForensicAnalyzer({
                   ? buildStylometryVerdict(score.stilometricDeviation)
                   : null
               }
+              autoRunOnMount
+              onAnalysisComplete={onStylometryComplete}
             />
           </motion.div>
         )}
