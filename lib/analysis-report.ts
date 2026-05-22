@@ -22,6 +22,14 @@ import {
   type AnalysisScore,
 } from "@/lib/supabase/queries"
 
+export interface StylometryDbMetrics {
+  ttr: number
+  asl: number
+  verbs: number
+  adjs: number
+  punct: number
+}
+
 export interface StudentScore {
   aiScore: number
   similarity: number
@@ -39,6 +47,19 @@ export interface StudentScore {
   peerMatches: { name: string; similarity: number }[]
   /** Cached global web plagiarism (analysis_scores.plagiarism_urls). */
   plagiarismWeb?: PlagiarismWebReport | null
+  /** Supabase ids for forensic stylometry API (camelCase + snake_case from API). */
+  id?: string
+  analysisScoreId?: string
+  analysis_score_id?: string
+  studentId?: string
+  student_id?: string
+  submissionId?: string
+  submission_id?: string
+  /** Raw deviation % from analysis_scores.stilometric (spaCy pipeline). */
+  stilometricDeviation?: number
+  /** Raw DB metrics (no UI scaling) for Recharts radar. */
+  stylometryMetrics?: StylometryDbMetrics | null
+  stylometryBaseline?: StylometryDbMetrics | null
 }
 
 export interface AnalysisReport {
@@ -71,7 +92,29 @@ function baselineFromRow(row: StudentBaseline | undefined): HistoricBaseline | n
 }
 
 function stylometricLabel(deviation: number): StudentScore["stilometric"] {
-  return deviation > 40 ? "Abatere Stilistica" : "Stil Consistent"
+  return deviation >= 38 ? "Abatere Stilistica" : "Stil Consistent"
+}
+
+function rawMetricsFromScoreRow(row: AnalysisScore): StylometryDbMetrics | null {
+  if (row.ttr == null && row.asl == null) return null
+  return {
+    ttr: row.ttr ?? 0,
+    asl: row.asl ?? 0,
+    verbs: row.verbs ?? 0,
+    adjs: row.adjs ?? 0,
+    punct: row.punct ?? 0,
+  }
+}
+
+function rawBaselineFromRow(row: StudentBaseline | undefined): StylometryDbMetrics | null {
+  if (!row || row.ttr == null) return null
+  return {
+    ttr: row.ttr ?? 0,
+    asl: row.asl ?? 0,
+    verbs: row.verbs ?? 0,
+    adjs: row.adjs ?? 0,
+    punct: row.punct ?? 0,
+  }
 }
 
 type ScoreWithPeers = AnalysisScore & {
@@ -161,15 +204,18 @@ export async function loadAnalysisReportForAssignment(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 4)
 
+    const rawMetrics = rawMetricsFromScoreRow(row)
+    const rawBaseline = rawBaselineFromRow(baselinesByStudentId[row.student_id])
+
     scores[studentName] = {
       aiScore: row.ai_score ?? 0,
       similarity: row.similarity ?? 0,
       stilometric: stylometricLabel(deviation),
-      lexicalDiversity: row.ttr ?? 0,
-      avgSentenceLength: row.asl ?? 0,
-      verbDensity: row.verbs ?? 0,
-      adjectiveDensity: row.adjs ?? 0,
-      punctuationUsage: row.punct ?? 0,
+      lexicalDiversity: row.ttr ?? historicVec.lexicalDiversity,
+      avgSentenceLength: row.asl ?? historicVec.avgSentenceLength,
+      verbDensity: row.verbs ?? historicVec.verbDensity,
+      adjectiveDensity: row.adjs ?? historicVec.adjectiveDensity,
+      punctuationUsage: row.punct ?? historicVec.punctuationUsage,
       historicLexicalDiversity: historicVec.lexicalDiversity,
       historicAvgSentenceLength: historicVec.avgSentenceLength,
       historicVerbDensity: historicVec.verbDensity,
@@ -177,6 +223,16 @@ export async function loadAnalysisReportForAssignment(
       historicPunctuationUsage: historicVec.punctuationUsage,
       peerMatches,
       plagiarismWeb: parsePlagiarismWebReport(row.plagiarism_urls ?? null),
+      id: row.id,
+      analysisScoreId: row.id,
+      analysis_score_id: row.id,
+      studentId: row.student_id,
+      student_id: row.student_id,
+      submissionId: row.submission_id ?? undefined,
+      submission_id: row.submission_id ?? undefined,
+      stilometricDeviation: deviation,
+      stylometryMetrics: rawMetrics,
+      stylometryBaseline: rawBaseline,
     }
   }
 

@@ -49,6 +49,28 @@ export interface StudentScore {
     sursa_principala: string | null
     plagiarism_urls: { url: string; scor: number }[]
   } | null
+  id?: string
+  analysisScoreId?: string
+  analysis_score_id?: string
+  studentId?: string
+  student_id?: string
+  submissionId?: string
+  submission_id?: string
+  stilometricDeviation?: number
+  stylometryMetrics?: {
+    ttr: number
+    asl: number
+    verbs: number
+    adjs: number
+    punct: number
+  } | null
+  stylometryBaseline?: {
+    ttr: number
+    asl: number
+    verbs: number
+    adjs: number
+    punct: number
+  } | null
 }
 
 export interface StudentSubmission {

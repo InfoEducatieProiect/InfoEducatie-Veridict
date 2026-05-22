@@ -73,7 +73,6 @@ export async function persistAnalysisReport(
       ai_score: sc?.aiScore ?? 0,
       similarity: sc?.similarity ?? 0,
       stilometric: stilometricDev,
-      stilometric_consistent: stilometricDev <= 40,
       ttr: sc?.lexicalDiversity ?? null,
       asl: sc?.avgSentenceLength ?? null,
       verbs: sc?.verbDensity ?? null,
@@ -136,6 +135,18 @@ export async function persistAnalysisReport(
       return updateSubmissionAnalysis(sub.id, sc.aiScore, supabase)
     }),
   )
+
+  for (const sub of submissions) {
+    const inserted = insertedByStudentId.get(sub.studentId)
+    const sc = report.scores[sub.studentName]
+    if (!sc || !inserted?.id) continue
+    report.scores[sub.studentName] = {
+      ...sc,
+      analysisScoreId: inserted.id,
+      studentId: sub.studentId,
+      submissionId: sub.id,
+    }
+  }
 
   return {
     ...report,

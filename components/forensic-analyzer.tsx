@@ -7,6 +7,8 @@ import {
   AlertTriangle, Info, X, GitCompare, ExternalLink, Globe,
 } from "lucide-react"
 import type { StudentScore } from "@/lib/assignment-store"
+import RadarStilometricTab from "@/components/RadarStilometricTab"
+import { buildStylometryVerdict } from "@/lib/stylometry-types"
 import { BALTAGUL_TEXTS } from "@/lib/assignment-store"
 import {
   getSimilarPhrases,
@@ -33,6 +35,8 @@ interface ForensicAnalyzerProps {
   integrityGraphNodes?: string[]
   /** Called when a new web plagiarism report is persisted */
   onPlagiarismReport?: (report: RaportPlagiatWeb) => void
+  analysisScoreId: string
+  studentId: string
 }
 
 function HighlightedText({
@@ -1724,6 +1728,8 @@ export default function ForensicAnalyzer({
   assignmentId,
   submissionId,
   submissionTexts,
+  analysisScoreId,
+  studentId,
   allScores,
   integrityGraphEdges,
   integrityGraphNodes,
@@ -1823,7 +1829,22 @@ export default function ForensicAnalyzer({
         )}
         {activeTab === "radar" && (
           <motion.div key="radar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <StylometricRadar score={score} />
+            <RadarStilometricTab
+              studentName={studentName}
+              assignmentId={assignmentId}
+              submissionId={submissionId}
+              analysisScoreId={analysisScoreId}
+              studentId={studentId}
+              text={submissionTexts[studentName] ?? ""}
+              initialMetrics={score.stylometryMetrics ?? null}
+              initialBaseline={score.stylometryBaseline ?? null}
+              initialDeviation={score.stilometricDeviation ?? null}
+              initialVerdict={
+                score.stilometricDeviation != null
+                  ? buildStylometryVerdict(score.stilometricDeviation)
+                  : null
+              }
+            />
           </motion.div>
         )}
         {activeTab === "classification" && (

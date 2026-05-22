@@ -19,6 +19,7 @@ import ForensicAnalyzer from "@/components/forensic-analyzer"
 import {
   loadAnalysisReportForAssignment,
 } from "@/lib/analysis-report"
+import { resolveForensicScoreIds } from "@/lib/forensic-score-ids"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,28 @@ interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
+  id?: string
+  analysisScoreId?: string
+  analysis_score_id?: string
+  studentId?: string
+  student_id?: string
+  submissionId?: string
+  submission_id?: string
+  stilometricDeviation?: number
+  stylometryMetrics?: {
+    ttr: number
+    asl: number
+    verbs: number
+    adjs: number
+    punct: number
+  } | null
+  stylometryBaseline?: {
+    ttr: number
+    asl: number
+    verbs: number
+    adjs: number
+    punct: number
+  } | null
 }
 
 interface AnalysisReport {
@@ -837,6 +860,7 @@ function AssignmentDetail({
     assignmentId: string,
     submissionId: string,
     submissionTexts: Record<string, string>,
+    studentIdFromSubmission?: string,
   ) => void
   showReport: boolean
   setShowReport: (v: boolean | ((prev: boolean) => boolean)) => void
@@ -1157,7 +1181,17 @@ function AssignmentDetail({
                               <Eye size={11} aria-hidden="true" />Citeste
                             </button>
                             {hasReport && showReport && rScore && (
-                              <button onClick={() => onOpenForensic(s.studentName, rScore, assignment.id, s.id, submissionTexts)}
+                              <button
+                                onClick={() =>
+                                  onOpenForensic(
+                                    s.studentName,
+                                    rScore,
+                                    assignment.id,
+                                    s.id,
+                                    submissionTexts,
+                                    s.student_id,
+                                  )
+                                }
                                 className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                                 style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(0,31,63,0.06)" }}
                                 aria-label={`Mai multe detalii pentru ${s.studentName}`}>
@@ -1519,12 +1553,14 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
 
   // BUG #2 fix: forensicData is NOT cleared when going back to detail —
   // it is preserved so returning to forensic is instant without re-computation.
-  const [forensicData, setForensicData] = useState<{ 
+  const [forensicData, setForensicData] = useState<{
     studentName: string
     score: StudentScore
     assignmentId: string
     submissionId: string
     submissionTexts: Record<string, string>
+    analysisScoreId: string
+    studentId: string
   } | null>(null)
 
   // HOISTED: showReport is lifted to this parent so it survives the
@@ -1603,8 +1639,36 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     assignmentId: string,
     submissionId: string,
     submissionTexts: Record<string, string>,
+    studentIdFromSubmission?: string,
   ) => {
-    setForensicData({ studentName, score, assignmentId, submissionId, submissionTexts })
+    const { analysisScoreId, studentId, submissionId: resolvedSubmissionId } =
+      resolveForensicScoreIds(score, {
+        submissionId,
+        studentId: studentIdFromSubmission,
+      })
+
+    if (!analysisScoreId || !studentId) {
+      console.error("[Veridict] Missing keys", {
+        score,
+        resolved: { analysisScoreId, studentId, submissionId: resolvedSubmissionId },
+        studentIdFromSubmission,
+      })
+    }
+
+    setForensicData({
+      studentName,
+      score: {
+        ...score,
+        analysisScoreId: analysisScoreId || score.analysisScoreId,
+        studentId: studentId || score.studentId,
+        submissionId: resolvedSubmissionId,
+      },
+      assignmentId,
+      submissionId: resolvedSubmissionId,
+      submissionTexts,
+      analysisScoreId,
+      studentId,
+    })
     setView("detail")
   }
 
@@ -1742,6 +1806,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                   onBack={handleBackFromForensic}
                   assignmentId={forensicData.assignmentId}
                   submissionId={forensicData.submissionId}
+                  analysisScoreId={forensicData.analysisScoreId}
+                  studentId={forensicData.studentId}
                   submissionTexts={forensicData.submissionTexts}
                   allScores={Object.fromEntries(
                     Object.entries(analysisReports[forensicData.assignmentId]?.scores ?? {}).map(
