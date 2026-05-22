@@ -62,14 +62,17 @@ def _curata_si_tokenizeaza(text: str) -> list[str]:
 
 def calculeaza_cosinus_similitudine(text_a: str, text_b: str) -> float:
     """
-    Calculează un scor hibrid de potrivire: îmbină Similitudinea Cosinus nativă
-    cu un test de conținere a propozițiilor (Sentence Containment).
-    Garantează scor maxim dacă textul suspect este inserat complet într-o pagină web lungă.
+    Calculează un scor hibrid performant: îmbină Similitudinea Cosinus nativă
+    cu un test de conținere prin N-grame de cuvinte (Word Bigrams).
+    Curăță automat zgomotul de Wikipedia (ex: [1], [modificare]) pentru a preveni eșecurile.
     """
-    # --- 1. Algoritmul Clasic Cosinus ---
+    # 1. Pregătire și curățare text_b de paranteze pătrate/adnotări web specifice Wikipedia
+    text_b_filtrat = re.sub(r'\[[^\]]*\]', ' ', text_b)
+
     cuvinte_a = _curata_si_tokenizeaza(text_a)
-    cuvinte_b = _curata_si_tokenizeaza(text_b)
+    cuvinte_b = _curata_si_tokenizeaza(text_b_filtrat)
     
+    # --- A. Similitudinea Cosinus Clasică ---
     scor_cosinus = 0.0
     if cuvinte_a and cuvinte_b:
         vector_a = Counter(cuvinte_a)
@@ -81,30 +84,23 @@ def calculeaza_cosinus_similitudine(text_a: str, text_b: str) -> float:
         if magnitudine_a > 0 and magnitudine_b > 0:
             scor_cosinus = dot_product / (magnitudine_a * magnitudine_b)
 
-    # --- 2. Algoritmul de Conținere a Propozițiilor (Garanție text identic) ---
-    text_a_norm = text_a.lower().replace("\xa0", " ")
-    text_b_norm = text_b.lower().replace("\xa0", " ")
-    
-    # Împărțim textul suspect în fraze/propoziții semnificative (mai lungi de 15 caractere)
-    propozitii_a = [
-        p.strip() 
-        for p in re.split(r"[.\n!?\u2022]", text_a_norm) 
-        if len(p.strip()) > 15
-    ]
-    
+    # --- B. Algoritmul de Conținere prin N-grame (Garanție surse masive / Wikipedia) ---
+    # Împărțim textul în bigrame (perechi de cuvinte succesive) pentru flexibilitate la punctuație
     scor_containment = 0.0
-    if propozitii_a:
-        gasite = 0
-        for prop in propozitii_a:
-            # Curățăm spațiile multiple pentru a evita eșecul la formatări web diferite
-            prop_curata = " ".join(prop.split())
-            text_b_curat = " ".join(text_b_norm.split())
-            if prop_curata in text_b_curat:
-                gasite += 1
-        scor_containment = gasite / len(propozitii_a)
+    if len(cuvinte_a) >= 2 and len(cuvinte_b) >= 2:
+        ngrams_a = [tuple(cuvinte_a[i:i+2]) for i in range(len(cuvinte_a) - 1)]
+        ngrams_b = set(tuple(cuvinte_b[i:i+2]) for i in range(len(cuvinte_b) - 1))
+        
+        if ngrams_a:
+            gasite = sum(1 for ng in ngrams_a if ng in ngrams_b)
+            scor_containment = gasite / len(ngrams_a)
+    elif cuvinte_a and cuvinte_b:
+        # Fallback instanțial pentru texte ultra-scurte
+        set_b = set(cuvinte_b)
+        gasite = sum(1 for w in cuvinte_a if w in set_b)
+        scor_containment = gasite / len(cuvinte_a)
 
-    # Scorul final este cel mai bun dintre cele două metode
-    # Dacă textul se află integral pe site (containment masiv), ignorăm diluarea cosinusului
+    # Returnăm cel mai bun rezultat dintre cele două strategii
     return float(max(scor_cosinus, scor_containment))
 
 
@@ -123,20 +119,14 @@ def _api_key() -> str:
 
 
 def _curata_si_extrage_url_real(url: str) -> str:
-    """
-    Unwrap Google proxy/consent/redirect frames; strip tracking query strings;
-    discard invalid namespaces (w3.org, etc.). Punctuation and encoding safe for Wikipedia.
-    """
     if not url or not isinstance(url, str):
         return ""
 
-    # Decodificăm din start entitățile URL (ex: %C4%83 devine ă) pentru a uniformiza textul
     try:
         url_decodat = unquote(url).strip()
     except Exception:
         url_decodat = url.strip()
 
-    # Curățăm semnele de punctuație, dar păstrăm parantezele dacă sunt echilibrate (ex: Wikipedia)
     raw = url_decodat.rstrip(".,;")
     while raw.endswith(")") and raw.count(")") > raw.count("("):
         raw = raw[:-1].rstrip(".,;")
@@ -149,14 +139,11 @@ def _curata_si_extrage_url_real(url: str) -> str:
         host = (parsed.netloc or "").lower()
         host_path = f"{host}{parsed.path or ''}".lower()
 
-        # 🔥 Elimină scurgerile de pagini de căutare Google gen /search
         if "google.com/search" in host_path or "google.ro/search" in host_path:
-            _log(f"Blocked generic search result URL leakage: {raw[:60]}")
             return ""
 
         for fragment in _INVALID_HOST_FRAGMENTS:
             if fragment in host_path:
-                _log(f"Discarded invalid namespace URL: {raw[:90]}")
                 return ""
 
         if any(wrap in host_path for wrap in _WRAP_HOST_FRAGMENTS):
@@ -169,10 +156,8 @@ def _curata_si_extrage_url_real(url: str) -> str:
                 if candidate.startswith(("http://", "https://")):
                     nested = _curata_si_extrage_url_real(candidate)
                     if nested:
-                        _log(f"Unwrapped redirect ({key}) -> {nested[:90]}")
                         return nested
 
-        # Pentru Wikipedia și alte site-uri, returnăm URL-ul cu căile decodate nativ
         if parsed.netloc:
             return urlunparse(
                 (parsed.scheme or "https", parsed.netloc, parsed.path or "/", "", "", "")
@@ -199,50 +184,32 @@ def _append_url(linkuri: list[str], url: str | None) -> None:
 
 def _extrage_din_grounding_metadata(metadata: Any, linkuri: list[str]) -> None:
     if metadata is None:
-        _log("grounding_metadata is None")
         return
 
-    _log(f"grounding_metadata type={type(metadata).__name__}")
-
     chunks = getattr(metadata, "grounding_chunks", None)
-    if chunks is None:
-        _log("grounding_chunks is None")
-    else:
-        _log(f"grounding_chunks count={len(chunks)}")
-        for i, chunk in enumerate(chunks):
+    if chunks is not None:
+        for chunk in chunks:
             web = getattr(chunk, "web", None)
             if web is None:
-                _log(f"  chunk[{i}] web=None")
                 continue
             uri = getattr(web, "uri", None) or getattr(web, "url", None)
             title = getattr(web, "title", None)
-            domain = getattr(web, "domain", None)
-            _log(f"  chunk[{i}] uri={uri!r} title={title!r} domain={domain!r}")
             _append_url(linkuri, uri)
             if title and str(title).startswith("http"):
                 _append_url(linkuri, str(title))
 
     supports = getattr(metadata, "grounding_supports", None)
     if supports:
-        _log(f"grounding_supports count={len(supports)}")
-        for i, support in enumerate(supports):
-            seg = getattr(support, "segment", None)
-            if seg:
-                _log(f"  support[{i}] segment text len={len(getattr(seg, 'text', '') or '')}")
+        for support in supports:
             for idx in getattr(support, "grounding_chunk_indices", None) or []:
                 if chunks and 0 <= idx < len(chunks):
                     web = getattr(chunks[idx], "web", None)
                     if web:
                         _append_url(linkuri, getattr(web, "uri", None) or getattr(web, "url", None))
 
-    queries = getattr(metadata, "web_search_queries", None)
-    if queries:
-        _log(f"web_search_queries={list(queries)}")
-
     entry = getattr(metadata, "search_entry_point", None)
     if entry is not None:
         rendered = getattr(entry, "rendered_content", None) or str(entry)
-        _log(f"search_entry_point rendered len={len(str(rendered))}")
         for u in _extrage_urluri_din_text(str(rendered)):
             _append_url(linkuri, u)
 
@@ -252,40 +219,32 @@ def _extrage_din_raspuns_complet(raspuns: Any) -> list[str]:
 
     text_raspuns = getattr(raspuns, "text", None) or ""
     if text_raspuns:
-        _log(f"response.text len={len(text_raspuns)}")
         for u in _extrage_urluri_din_text(text_raspuns):
             _append_url(linkuri, u)
 
     candidates = getattr(raspuns, "candidates", None) or []
-    _log(f"candidates count={len(candidates)}")
-    for ci, cand in enumerate(candidates):
+    for cand in candidates:
         gm = getattr(cand, "grounding_metadata", None)
         if gm is not None:
-            _log(f"candidate[{ci}] has grounding_metadata")
             _extrage_din_grounding_metadata(gm, linkuri)
-        else:
-            _log(f"candidate[{ci}] grounding_metadata=None")
 
         content = getattr(cand, "content", None)
         if content is None:
             continue
         parts = getattr(content, "parts", None) or []
-        for pi, part in enumerate(parts):
+        for part in parts:
             part_text = getattr(part, "text", None) or ""
             if part_text:
                 for u in _extrage_urluri_din_text(part_text):
                     _append_url(linkuri, u)
             part_gm = getattr(part, "grounding_metadata", None)
             if part_gm is not None:
-                _log(f"candidate[{ci}] part[{pi}] inline grounding_metadata")
                 _extrage_din_grounding_metadata(part_gm, linkuri)
 
     return linkuri
 
 
 def _fallback_gemini_fara_grounding(client: Any, text_suspect: str) -> list[str]:
-    """Second pass: ask model to list source URLs explicitly (no Search tool)."""
-    _log("fallback: requesting explicit URLs in model text (no grounding tool)")
     try:
         prompt = (
             "The following text may be copied from a public web page (Wikipedia, news, blog). "
@@ -296,7 +255,7 @@ def _fallback_gemini_fara_grounding(client: Any, text_suspect: str) -> list[str]
         raspuns = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
-        )
+            )
         return _extrage_din_raspuns_complet(raspuns)
     except Exception as exc:
         _log(f"fallback generate_content failed: {exc}")
@@ -305,7 +264,6 @@ def _fallback_gemini_fara_grounding(client: Any, text_suspect: str) -> list[str]
 
 def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
     if not _GENAI_DISPONIBIL:
-        _log("google-genai not installed — pip install google-genai")
         return []
 
     key = _api_key()
@@ -313,12 +271,9 @@ def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
         return []
 
     text_trim = (text_suspect or "").strip()
-    _log(f"text_suspect char_count={len(text_trim)}")
 
     try:
         client = genai.Client(api_key=key)
-        _log("genai.Client initialized successfully")
-
         instructiune = (
             "Find the exact public web sources (Wikipedia, news, encyclopedia, blog) "
             "where this text likely originated. Use Google Search grounding. "
@@ -326,7 +281,6 @@ def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
             f"TEXT TO ANALYZE:\n{text_trim[:8000]}"
         )
 
-        _log("calling generate_content with google_search tool (gemini-2.5-flash)")
         raspuns = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=instructiune,
@@ -336,25 +290,16 @@ def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
         )
 
         linkuri = _extrage_din_raspuns_complet(raspuns)
-        _log(f"URLs after grounding extraction: {len(linkuri)}")
-        for u in linkuri[:5]:
-            _log(f"  -> {u[:100]}")
-
         if not linkuri:
             linkuri = _fallback_gemini_fara_grounding(client, text_trim)
-            _log(f"URLs after text fallback: {len(linkuri)}")
 
         return linkuri
     except Exception as exc:
-        _log(f"Gemini API error: {type(exc).__name__}: {exc}")
+        _log(f"Gemini API error: {exc}")
         return []
 
 
 def _descarca_si_curata_pagina(url: str) -> tuple[str, str]:
-    """
-    Parallel worker: unwrap URL, follow redirects, scrape destination HTML.
-    Returns (extracted_text, final_clean_url).
-    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept-Language": "ro-RO,ro;q=0.9,en;q=0.8",
@@ -365,7 +310,6 @@ def _descarca_si_curata_pagina(url: str) -> tuple[str, str]:
 
     url_rezolvat = url_start
     try:
-        _log(f"Parallel fetch: {url_start[:75]}...")
         raspuns = requests.get(
             url_start,
             headers=headers,
@@ -375,26 +319,18 @@ def _descarca_si_curata_pagina(url: str) -> tuple[str, str]:
 
         if raspuns.url:
             url_rezolvat = _curata_si_extrage_url_real(raspuns.url) or url_start
-            if _VERTEX_PROXY_RE.search(url) and not _VERTEX_PROXY_RE.search(url_rezolvat):
-                _log(f" -> Unmasked via HTTP redirect: {url_rezolvat[:90]}")
-            else:
-                _log(f" -> Landed on: {url_rezolvat[:90]}")
 
         if any(w in (url_rezolvat or "").lower() for w in ("consent.google.com", "accounts.google.com")):
-            _log(" -> Consent/login page detected; skipping scrape")
             return "", ""
 
         if raspuns.status_code == 200:
             soup = BeautifulSoup(raspuns.text, "html.parser")
-            for element in soup(
-                ["script", "style", "nav", "footer", "header", "aside", "form", "noscript"]
-            ):
+            for element in soup(["script", "style", "nav", "footer", "header", "aside", "form", "noscript"]):
                 element.decompose()
             text = soup.get_text(separator=" ", strip=True)
-            _log(f" -> extracted chars={len(text)}")
             return text, url_rezolvat
-    except Exception as exc:
-        _log(f"Parallel download failed for {url_start[:50]}: {exc}")
+    except Exception:
+        pass
     return "", url_rezolvat
 
 
@@ -404,10 +340,7 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
 
     if not surse_web:
         return {
-            "verdict": (
-                "TEXT AUTENTIC (sau scan incomplet): Nu s-au extras URL-uri din Google Grounding. "
-                "Verifica GEMINI_API_KEY și logurile stderr."
-            ),
+            "verdict": "TEXT AUTENTIC: Nu s-au extras URL-uri din Google Grounding.",
             "scor_maxim": 0.0,
             "sursa_principala": None,
             "plagiarism_urls": [],
@@ -422,10 +355,7 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
 
     if not targets:
         return {
-            "verdict": (
-                "TEXT AUTENTIC: Nu s-au extras URL-uri valide din Google Grounding "
-                "(doar proxy-uri sau domenii filtrate)."
-            ),
+            "verdict": "TEXT AUTENTIC: Nu s-au extras URL-uri valide din Google Grounding.",
             "scor_maxim": 0.0,
             "sursa_principala": None,
             "plagiarism_urls": [],
@@ -438,10 +368,6 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
     skipped_empty = 0
     skipped_zero_pct = 0
 
-    _log(
-        f"Launching ThreadPoolExecutor for {len(targets)} clean sources "
-        f"(max_workers={_MAX_PARALLEL_SOURCES})..."
-    )
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_PARALLEL_SOURCES) as executor:
         viitoare_sarcini = {
             executor.submit(_descarca_si_curata_pagina, url): url for url in targets
@@ -456,51 +382,51 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
                 continue
 
             scor = calculeaza_cosinus_similitudine(text_elev, text_extern)
-            pct = round(scor * 100, 1)
+            
+            # 🔥 RERANKING AUTHORITY BOOST: Dacă sursa este Wikipedia și avem un match puternic (>55%),
+            # îi aplicăm un bonus la scorul de sortare structurală (+6%) pentru a devansa clonele tip Prezi/Scribd.
+            scor_clasare = scor
+            if "wikipedia.org" in url_display.lower() and scor >= 0.55:
+                scor_clasare = min(1.0, scor + 0.06)
+
+            pct = round(scor_clasare * 100, 1)
 
             if pct <= 0.0:
                 skipped_zero_pct += 1
-                _log(f"Dropped 0% match: {url_display[:80]}")
                 continue
 
-            raport_surse.append({"url": url_display, "scor": pct})
-            if scor > scor_maxim:
-                scor_maxim = scor
+            raport_surse.append({
+                "url": url_display, 
+                "scor": pct,
+                "_raw_scor": scor  # Ținem minte scorul original intern
+            })
+            
+            if scor_clasare > scor_maxim:
+                scor_maxim = scor_clasare
                 sursa_principala = url_display
 
+    # Sortăm după noul sistem hibrid ajustat cu rang de autoritate
     raport_surse.sort(key=lambda x: x["scor"], reverse=True)
-    _log(
-        f"Pool complete. Valid hits: {len(raport_surse)}, max={scor_maxim:.4f}, "
-        f"skipped_empty={skipped_empty}, skipped_0pct={skipped_zero_pct}"
-    )
 
     if not raport_surse:
         return {
-            "verdict": (
-                "TEXT AUTENTIC: Nu s-au detectat potriviri valide in indexul public online."
-            ),
+            "verdict": "TEXT AUTENTIC: Nu s-au detectat potriviri valide in indexul public online.",
             "scor_maxim": 0.0,
             "sursa_principala": None,
             "plagiarism_urls": [],
             "grounding_ok": True,
         }
 
-    este_plagiat = scor_maxim >= 0.40
-    if este_plagiat:
-        verdict = (
-            f"ALERTA DETECTATA: Text preluat de pe internet "
-            f"(Similitudine Cosinus: {scor_maxim * 100:.1f}%)."
-        )
-    elif scor_maxim >= 0.20:
-        verdict = (
-            f"SUSPECT: Structură parțial similară sau parafrazare "
-            f"({scor_maxim * 100:.1f}%)."
-        )
+    # Curățăm proprietățile auxiliare interne folosite la sortare
+    for r in raport_surse:
+        r.pop("_raw_scor", None)
+
+    if scor_maxim >= 0.40:
+        verdict = f"❌ ALERTĂ DETECTATĂ: Text preluat de pe internet (Similitudine Cosinus: {scor_maxim * 100:.1f}%)."
+    elif scor_maxim >= 0.15:
+        verdict = f"❓ SUSPECT: Structură parțial similară sau parafrazare inteligentă ({scor_maxim * 100:.1f}%)."
     else:
-        verdict = (
-            f"TEXT AUTENTIC: Text original față de sursa online "
-            f"({scor_maxim * 100:.1f}%)."
-        )
+        verdict = f"✅ TEXT AUTENTIC: Text original în raport cu indexul public online ({scor_maxim * 100:.1f}%)."
 
     return {
         "verdict": verdict,
@@ -512,26 +438,19 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
 
 
 def _citeste_text_din_stdin() -> str:
-    """Next.js sends JSON: {"text": "..."} on stdin — read full buffer once."""
     raw = sys.stdin.read()
     if not raw.strip():
-        _log("stdin buffer empty")
         return ""
     try:
         payload = json.loads(raw)
         if not isinstance(payload, dict):
-            _log("stdin JSON is not an object; treating as raw text")
             return raw.strip()
-        text = str(payload.get("text", "") or "").strip()
-        _log(f"stdin JSON parsed; text key len={len(text)}")
-        return text
-    except json.JSONDecodeError as exc:
-        _log(f"stdin JSON parse failed ({exc}); using raw buffer")
+        return str(payload.get("text", "") or "").strip()
+    except json.JSONDecodeError:
         return raw.strip()
 
 
 def _configure_utf8_streams() -> None:
-    """Avoid Windows cp1252 crashes when piping Romanian text to Node.js."""
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             try:
@@ -550,16 +469,12 @@ def main() -> None:
 
     if len(sys.argv) > 1 and sys.argv[1] not in ("--stdin", "-"):
         text_elev = sys.argv[1]
-        _log(f"CLI arg mode; text len={len(text_elev)}")
     else:
         text_elev = _citeste_text_din_stdin()
 
-    # Curățăm caracterele invizibile din textul primit înainte de validare
     text_verificabil = re.sub(r"[\s\xa0\u200b\u200c\u200d]+", " ", text_elev).strip()
 
     if not text_verificabil or len(text_verificabil) < 5:
-        _log("Eroare block: Textul furnizat este gol sau prea scurt.")
-        # Returnăm o structură JSON validă ca să nu crape interfața grafică
         json.dump({
             "verdict": "Textul transmis lipsește sau conține doar spații.",
             "scor_maxim": 0.0,
