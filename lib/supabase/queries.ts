@@ -365,8 +365,8 @@ export async function getStudentBaselines(
   return baselines
 }
 
-// Create an analysis run
-export async function createAnalysisRun(
+// Get or create an analysis run for an assignment (one row per assignment, upserted)
+export async function getOrCreateAnalysisRun(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisRun> {
@@ -374,15 +374,18 @@ export async function createAnalysisRun(
   const ranAt = new Date().toISOString()
   const { data, error } = await supabase
     .from("analysis_runs")
-    .insert({ assignment_id: assignmentId, ran_at: ranAt })
+    .upsert(
+      { assignment_id: assignmentId, ran_at: ranAt },
+      { onConflict: "assignment_id" },
+    )
     .select()
     .single()
-  
+
   if (error) throw error
   return data
 }
 
-// Save analysis scores (returns inserted rows with ids for peer_matches)
+// Save analysis scores — upsert on (analysis_run_id, submission_id) so reruns overwrite in place
 export async function saveAnalysisScores(
   scores: Omit<AnalysisScore, "id" | "created_at" | "student_name">[],
   supabaseClient?: SupabaseClient,
@@ -396,7 +399,7 @@ export async function saveAnalysisScores(
 
   const first = await supabase
     .from("analysis_scores")
-    .insert(scores)
+    .upsert(scores, { onConflict: "analysis_run_id,submission_id" })
     .select("*, profiles!analysis_scores_student_id_fkey(display_name)")
 
   if (!first.error) return parse(first.data || [])
@@ -409,23 +412,35 @@ export async function saveAnalysisScores(
   })
   const second = await supabase
     .from("analysis_scores")
-    .insert(legacyScores)
+    .upsert(legacyScores, { onConflict: "analysis_run_id,submission_id" })
     .select("*, profiles!analysis_scores_student_id_fkey(display_name)")
 
   if (second.error) throw second.error
   return parse(second.data || [])
 }
 
-// Save peer matches
+// Save peer matches — delete existing for these score IDs then insert fresh set
 export async function savePeerMatches(
   matches: PeerMatchInsert[],
   supabaseClient?: SupabaseClient,
+  scoreIdsToWipe?: string[],
 ): Promise<void> {
+  if (matches.length === 0) return
   const supabase = sb(supabaseClient)
-  const first = await supabase
-    .from("peer_matches")
-    .insert(matches)
 
+  // Delete stale peer_matches for the affected analysis_score rows before reinserting
+  const idsToDelete =
+    scoreIdsToWipe ??
+    [...new Set(matches.map((m) => m.analysis_score_id))]
+  if (idsToDelete.length > 0) {
+    const { error: delErr } = await supabase
+      .from("peer_matches")
+      .delete()
+      .in("analysis_score_id", idsToDelete)
+    if (delErr) throw delErr
+  }
+
+  const first = await supabase.from("peer_matches").insert(matches)
   if (!first.error) return
   if (!isMissingColumnError(first.error)) throw first.error
 
@@ -435,9 +450,7 @@ export async function savePeerMatches(
     peer_student_id: m.peer_student_id,
     similarity: m.similarity,
   }))
-  const second = await supabase
-    .from("peer_matches")
-    .insert(legacyMatches)
+  const second = await supabase.from("peer_matches").insert(legacyMatches)
   if (second.error) throw second.error
 }
 

@@ -94,53 +94,51 @@ export async function loadHistoricBaselineFromDb(
 
 /**
  * Persistă metricile lucrării curente + deviația în `analysis_scores` pentru acest submission.
+ * Plan A: update by analysisScoreId (fast path — always valid after getOrCreateAnalysisRun).
+ * Plan B: update directly by submission_id DESC without an extra SELECT (fallback).
  */
 async function persistCurrentWorkToAnalysisScore(
   analysisScoreId: string,
   current: StylometryMetrics,
   deviation: number,
   supabase: SupabaseClient,
-  submissionId?: string, // Parametru nou pentru Planul B
+  submissionId?: string,
 ): Promise<void> {
   const dbCols = stylometryMetricsToDbColumns(current)
+  const payload = { ...dbCols, stilometric: deviation }
 
-  // 1. PLAN A: Încercăm update-ul clasic după analysisScoreId
   if (analysisScoreId && analysisScoreId !== "undefined") {
-    const { data, error } = await supabase
+    const { error, count } = await supabase
       .from("analysis_scores")
-      .update({
-        ...dbCols,
-        stilometric: deviation,
-      })
+      .update(payload)
       .eq("id", analysisScoreId)
-      .select()
 
-    // Dacă s-a făcut update cu succes pe rândul căutat, ne oprim aici
-    if (!error && data && data.length > 0) return
+    if (error) throw error
+    if ((count ?? 1) > 0) return
   }
 
-  // 2. PLAN B (Fallback): Dacă rândul n-a fost găsit după ID, căutăm după submission_id
   if (submissionId) {
-    const { data: latestRows } = await supabase
+    const { data: row } = await supabase
       .from("analysis_scores")
       .select("id")
       .eq("submission_id", submissionId)
       .order("created_at", { ascending: false })
       .limit(1)
+      .maybeSingle()
 
-    if (latestRows && latestRows.length > 0) {
+    if (row?.id) {
       const { error } = await supabase
         .from("analysis_scores")
-        .update({
-          ...dbCols,
-          stilometric: deviation,
-        })
-        .eq("id", latestRows[0].id)
-      
+        .update(payload)
+        .eq("id", row.id)
       if (error) throw error
       return
     }
   }
+
+  throw new Error(
+    `[stylometry] No analysis_scores row found for analysisScoreId=${analysisScoreId} submissionId=${submissionId}`,
+  )
 }
 
 function runStylometryPython(

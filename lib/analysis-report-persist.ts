@@ -17,7 +17,7 @@ import { buildAnalysisReport } from "./analysis-report-build"
 import type { AnalysisReport, SubmissionInput } from "./analysis-report"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  createAnalysisRun,
+  getOrCreateAnalysisRun,
   saveAnalysisScores,
   savePeerMatches,
   updateSubmissionAnalysis,
@@ -61,7 +61,7 @@ export async function persistAnalysisReport(
     baselinesByStudentId,
   )
 
-  const run = await createAnalysisRun(assignmentId, supabase)
+  const run = await getOrCreateAnalysisRun(assignmentId, supabase)
 
   const scoreRows = submissions.map((sub) => {
     const sc = report.scores[sub.studentName]
@@ -139,7 +139,8 @@ export async function persistAnalysisReport(
   }
 
   if (peerRowsFlat.length > 0) {
-    await savePeerMatches(peerRowsFlat, supabase)
+    const affectedScoreIds = insertedScores.map((s) => s.id).filter(Boolean)
+    await savePeerMatches(peerRowsFlat, supabase, affectedScoreIds)
   }
 
   await Promise.all(
