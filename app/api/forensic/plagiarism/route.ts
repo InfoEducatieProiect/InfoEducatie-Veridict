@@ -4,6 +4,7 @@ import { runPlagiarismGeminiScan } from "@/lib/plagiarism-gemini-python"
 import type { PlagiarismWebReport } from "@/lib/plagiarism-web"
 import {
   fetchScanSourcesForSubmission,
+  maxSimilarityFromRows,
   plagiarismReportFromScanSources,
   plagiarismScorToPercent,
 } from "@/lib/plagiarism-scan-sources"
@@ -74,17 +75,16 @@ async function persistFreshScan(
     if (!url || score <= 0) continue
     if (seenUrls.has(url)) continue
     seenUrls.add(url)
-    rows.push({
-      submission_id: submissionId,
-      url,
-      similarity_score: score,
-    })
+    rows.push({ submission_id: submissionId, url, similarity_score: score })
   }
 
   if (rows.length > 0) {
     const { error: insertError } = await supabase
       .from("scan_sources")
-      .insert(rows)
+      .upsert(rows, {
+        onConflict: "submission_id,url",
+        ignoreDuplicates: false,
+      })
 
     if (insertError) throw insertError
   }
@@ -160,47 +160,24 @@ export async function POST(request: Request) {
 
     const subRow = submission as SubmissionRow
 
-    // ── 2. Cache check (skip when force === true) ─────────────────────────────
-    if (!force) {
-      try {
-        const existingSources = await fetchScanSourcesForSubmission(
-          supabase,
-          submissionId,
-        )
-
-        if (existingSources.length > 0) {
-          const cachedReport = plagiarismReportFromScanSources(existingSources)
-          return NextResponse.json(reportToJsonResponse(cachedReport, true))
-        }
-      } catch (cacheErr) {
-        console.error(
-          "[api/forensic/plagiarism] Cache lookup failed, continuing to fresh scan:",
-          cacheErr,
-        )
-      }
-    }
-
-    // ── 3. Rescan / cache miss / force ───────────────────────────────────────
+    // ── 2. Load existing cache (always, even on force — needed for replace-if-better) ──
+    let existingSources: Awaited<ReturnType<typeof fetchScanSourcesForSubmission>> = []
     try {
-      await wipeScanSourcesForSubmission(supabase, submissionId)
-    } catch (wipeErr) {
-      console.error(
-        "[api/forensic/plagiarism] Pre-scan wipe failed (aborting insert to avoid duplicates):",
-        wipeErr,
-      )
-      return NextResponse.json(
-        { error: "Could not clear previous scan results" },
-        { status: 500 },
-      )
+      existingSources = await fetchScanSourcesForSubmission(supabase, submissionId)
+    } catch (cacheErr) {
+      console.error("[api/forensic/plagiarism] Cache lookup failed:", cacheErr)
     }
 
-    const bodyText =
-      typeof body.text === "string" ? body.text.trim() : ""
-    
-    // ── MODIFICARE AICI: Ne bazăm exclusiv pe text-ul valid din DB
-    const text =
-      bodyText ||
-      (subRow.text ?? "").trim()
+    if (!force && existingSources.length > 0) {
+      const cachedReport = plagiarismReportFromScanSources(existingSources)
+      return NextResponse.json(reportToJsonResponse(cachedReport, true))
+    }
+
+    const oldMax = maxSimilarityFromRows(existingSources)
+
+    // ── 3. Run fresh scan ────────────────────────────────────────────────────
+    const bodyText = typeof body.text === "string" ? body.text.trim() : ""
+    const text = bodyText || (subRow.text ?? "").trim()
 
     if (!text) {
       return NextResponse.json(
@@ -211,13 +188,40 @@ export async function POST(request: Request) {
 
     const pythonResult = await runPlagiarismGeminiScan(text, submissionId)
 
-    try {
-      await persistFreshScan(supabase, submissionId, pythonResult)
-    } catch (dbErr) {
-      console.error("[api/forensic/plagiarism] DB persist failed:", dbErr)
+    // ── 4. Replace-if-better: only wipe + persist when new scan is stronger ─
+    const newMax = plagiarismScorToPercent(
+      Math.max(0, ...pythonResult.plagiarism_urls.map((h) => h.scor)),
+    )
+
+    const hasNewResults = pythonResult.plagiarism_urls.length > 0 && newMax > 0
+
+    if (!hasNewResults) {
+      // Scan returned nothing useful — preserve existing cache
+      if (existingSources.length > 0) {
+        const cachedReport = plagiarismReportFromScanSources(existingSources)
+        return NextResponse.json(reportToJsonResponse(cachedReport, true))
+      }
+      return NextResponse.json(reportToJsonResponse(pythonResult, false))
     }
 
-    return NextResponse.json(reportToJsonResponse(pythonResult, false))
+    if (newMax > oldMax || existingSources.length === 0) {
+      // New scan found better results — wipe old rows and persist new batch
+      try {
+        await wipeScanSourcesForSubmission(supabase, submissionId)
+      } catch (wipeErr) {
+        console.error("[api/forensic/plagiarism] Pre-persist wipe failed:", wipeErr)
+      }
+      try {
+        await persistFreshScan(supabase, submissionId, pythonResult)
+      } catch (dbErr) {
+        console.error("[api/forensic/plagiarism] DB persist failed:", dbErr)
+      }
+      return NextResponse.json(reportToJsonResponse(pythonResult, false))
+    }
+
+    // New scan is not better than cache — keep cache, return it
+    const cachedReport = plagiarismReportFromScanSources(existingSources)
+    return NextResponse.json(reportToJsonResponse(cachedReport, true))
   } catch (e) {
     console.error("[api/forensic/plagiarism]", e)
     const message = e instanceof Error ? e.message : "Plagiarism scan failed"

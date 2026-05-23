@@ -103,6 +103,12 @@ export async function fetchScanSourcesMapBySubmissionIds(
   return map
 }
 
+/** Returns the highest similarity_score from a list of rows (0 if empty). */
+export function maxSimilarityFromRows(rows: ScanSourceRow[]): number {
+  if (!rows.length) return 0
+  return rows.reduce((m, r) => Math.max(m, Number(r.similarity_score)), 0)
+}
+
 /** Python `scor` / `scor_maxim` may be 0–1 or 0–100; DB columns store percentage 0–100. */
 export function plagiarismScorToPercent(value: number): number {
   if (value <= 0) return 0
