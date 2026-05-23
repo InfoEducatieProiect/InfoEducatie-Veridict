@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { LanguageProvider } from "@/lib/i18n/language-provider"
+import LanguageToggle from "@/components/language-toggle"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,7 +30,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ro" className={`${inter.variable} bg-background`}>
-      <body className="font-sans antialiased">{children}</body>
+      <head>
+        {/* Anti-flash: read lang cookie before React hydrates */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var c=document.cookie.split(';').find(function(s){return s.trim().startsWith('lang=')});var l=c?c.split('=')[1].trim():localStorage.getItem('lang');if(l==='en')document.documentElement.lang='en';}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className="font-sans antialiased">
+        <LanguageProvider>
+          <LanguageToggle />
+          {children}
+        </LanguageProvider>
+      </body>
     </html>
   )
 }

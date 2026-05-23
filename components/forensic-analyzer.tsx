@@ -20,6 +20,7 @@ import {
   calculateCosineSimilarity,
   gaseste_fraze_similare_ideatic,
 } from "@/lib/analysisEngine"
+import { useLanguage } from "@/lib/i18n/language-provider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ function DualComparisonModal({
   similarity: number
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   const leftRef = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
   const [activeSegIdx, setActiveSegIdx] = useState<number | null>(null)
@@ -227,9 +229,9 @@ function DualComparisonModal({
         <div className="flex items-center gap-3">
           <GitCompare size={20} className="text-blue-300" aria-hidden="true" />
           <div>
-            <h2 className="text-sm font-bold">Modul de Comparatie Duala</h2>
+            <h2 className="text-sm font-bold">{t("forensic.dualModalTitle")}</h2>
             <p className="text-xs" style={{ color: "#93C5FD" }}>
-              Similaritate detectata:{" "}
+              {t("forensic.dualSimilarity")}{" "}
               <span className="font-black" style={{ color: similarity > 65 ? "#FCA5A5" : "#FCD34D" }}>
                 {similarity}%
               </span>
@@ -239,7 +241,7 @@ function DualComparisonModal({
         <button
           onClick={onClose}
           className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
-          aria-label="Inchide comparatia"
+          aria-label={t("forensic.closeComparison")}
         >
           <X size={18} className="text-blue-300" />
         </button>
@@ -254,12 +256,10 @@ function DualComparisonModal({
           className="rounded-full px-3 py-1 text-xs font-black"
           style={{ background: "rgba(245,158,11,0.18)", color: "#B45309" }}
         >
-          {totalMatchedPhrases} fraze detectate
+          {t("forensic.phrasesDetected", { n: totalMatchedPhrases })}
         </span>
         <p className="text-xs font-medium" style={{ color: "var(--dash-fg)" }}>
-          S-au detectat{" "}
-          <span className="font-black" style={{ color: "#B45309" }}>{totalMatchedPhrases}</span>{" "}
-          fraze cu structură ideatică comună depășind pragul critic Jaccard de cuvinte
+          {t("forensic.phrasesMsg", { n: totalMatchedPhrases })}
         </p>
       </div>
 
@@ -274,7 +274,7 @@ function DualComparisonModal({
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: "#3B82F6" }}>A</span>
             <span className="text-sm font-bold truncate" style={{ color: "var(--dash-fg)" }}>{studentA}</span>
             <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(59,130,246,0.1)", color: "var(--dash-accent)" }}>
-              Lucrarea A
+              {t("forensic.workA")}
             </span>
           </div>
           <div
@@ -301,7 +301,7 @@ function DualComparisonModal({
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: "#EF4444" }}>B</span>
             <span className="text-sm font-bold truncate" style={{ color: "var(--dash-fg)" }}>{studentB}</span>
             <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>
-              Lucrarea B
+              {t("forensic.workB")}
             </span>
           </div>
           <div
@@ -324,17 +324,17 @@ function DualComparisonModal({
       <div className="shrink-0 flex items-center gap-6 border-t px-6 py-3 text-xs" style={{ borderColor: "var(--dash-border)", color: "var(--dash-muted)" }}>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-5 rounded" style={{ background: "rgba(234,179,8,0.3)" }} />
-          Parafrazat (30–50%)
+          {t("forensic.legendParaphrase")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-5 rounded" style={{ background: "rgba(249,115,22,0.3)" }} />
-          Fraze similare (50���65%)
+          {t("forensic.legendSimilar")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-5 rounded" style={{ background: "rgba(239,68,68,0.3)" }} />
-          Identice / copiat ({">"}65%)
+          {t("forensic.legendIdentical")}
         </span>
-        <span className="ml-auto italic">Hover pe un fragment pentru a evidentia corespondenta in panoul opus.</span>
+        <span className="ml-auto italic">{t("forensic.legendHover")}</span>
       </div>
     </motion.div>
   )
@@ -351,6 +351,7 @@ function LocalSimilarityGraph({
   score: StudentScore
   submissionTexts: Record<string, string>
 }) {
+  const { t } = useLanguage()
   const [comparison, setComparison] = useState<{ peerName: string; similarity: number } | null>(null)
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null)
 
@@ -382,10 +383,10 @@ function LocalSimilarityGraph({
           <ShieldCheck size={32} className="text-emerald-600 dark:text-emerald-400" />
         </motion.div>
         <h3 className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
-          Lucrare Integă — Lipsă conexiuni critice
+          {t("forensic.cleanTitle")}
         </h3>
         <p className="text-sm max-w-md text-emerald-700 dark:text-emerald-300 leading-relaxed">
-          Acest elev nu prezintă conexiuni de similaritate structurală sau inspirație directă de la alți colegi din baza de date. Toate scorurile calculate sunt sub pragul critic de 50%.
+          {t("forensic.cleanMsg")}
         </p>
       </motion.div>
     )
@@ -428,7 +429,7 @@ function LocalSimilarityGraph({
           <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--dash-border)", background: "rgba(0,31,63,0.04)" }}>
             <ShieldAlert size={14} style={{ color: "#EF4444" }} aria-hidden="true" />
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--dash-fg)" }}>
-              Perechi Suspecte
+              {t("forensic.suspectPairs")}
             </span>
             <span
               className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-black"
@@ -485,7 +486,7 @@ function LocalSimilarityGraph({
                           borderColor: "#F59E0B",
                         }}
                       >
-                        Similaritate Vocabular: {peer.similarity.toFixed(1)}%
+                        {t("forensic.vocabSim", { pct: peer.similarity.toFixed(1) })}
                       </motion.span>
                     )}
                   </AnimatePresence>
@@ -508,7 +509,7 @@ function LocalSimilarityGraph({
                 style={{ background: "var(--dash-navy)" }}
               >
                 <GitCompare size={12} aria-hidden="true" />
-                Deschide Comparatie Duala
+                {t("forensic.openComparison")}
               </button>
             </motion.div>
           )}
@@ -524,11 +525,11 @@ function LocalSimilarityGraph({
           <div className="mb-4 flex items-center gap-2">
             <Network size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
             <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-              Graf de Similaritate Local
+              {t("forensic.graphTitle")}
             </h4>
           </div>
           <div className="flex justify-center overflow-x-auto">
-            <svg width="560" height="360" aria-label={`Graf de similaritate pentru ${studentName}`}>
+            <svg width="560" height="360" aria-label={t("forensic.graphAria", { name: studentName })}>
               {/* Edges — clickable — ONLY for peers >= 50% */}
               {criticalPeers.map((peer, i) => {
                 const isHighRisk = peer.similarity > 70
@@ -541,7 +542,7 @@ function LocalSimilarityGraph({
                     className="cursor-pointer"
                     onClick={() => setComparison({ peerName: peer.name, similarity: peer.similarity })}
                     role="button"
-                    aria-label={`Comparatie intre ${studentName} si ${peer.name}: ${peer.similarity}% similaritate`}
+                    aria-label={t("forensic.edgeAria", { a: studentName, b: peer.name, sim: peer.similarity })}
                   >
                     <line x1={cx} y1={cy} x2={peerPositions[i].x} y2={peerPositions[i].y} stroke="transparent" strokeWidth={18} />
                     <motion.line
@@ -556,7 +557,7 @@ function LocalSimilarityGraph({
                     />
                     <circle cx={mx} cy={my} r={10} fill={edgeColor + "20"} stroke={edgeColor} strokeWidth={1} opacity={0} className="hover:opacity-100 transition-opacity" />
                     <text x={mx} y={my - 10} textAnchor="middle" fontSize={11} fontWeight="bold" fill={edgeColor}>{peer.similarity}%</text>
-                    <text x={mx} y={my + 18} textAnchor="middle" fontSize={8} fill={edgeColor} opacity={0.7}>Click p/comparatie</text>
+                    <text x={mx} y={my + 18} textAnchor="middle" fontSize={8} fill={edgeColor} opacity={0.7}>{t("forensic.clickForComparison")}</text>
                   </g>
                 )
               })}
@@ -584,15 +585,15 @@ function LocalSimilarityGraph({
           <div className="mt-3 flex items-center gap-5 text-xs" style={{ color: "var(--dash-muted)" }}>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0.5 w-5 rounded" style={{ background: "#EF4444" }} />
-              {"Similaritate > 70%"}
+              {t("forensic.graphLegendHigh")}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0.5 w-5 rounded" style={{ background: "#F97316" }} />
-              {"Similaritate 50–70%"}
+              {t("forensic.graphLegendMid")}
             </span>
             <span className="flex items-center gap-1.5 ml-auto">
               <GitCompare size={12} style={{ color: "var(--dash-accent)" }} />
-              Apasati pe o muchie pentru comparatie split-screen
+              {t("forensic.graphClickEdge")}
             </span>
           </div>
         </motion.div>
@@ -604,11 +605,11 @@ function LocalSimilarityGraph({
 // ─── Tab 2: Stylometric Radar Chart ──────────────────────────────────────────
 
 const RADAR_AXES = [
-  { key: "lexicalDiversity", historicKey: "historicLexicalDiversity", lines: ["Diversitate", "Lexical\u0103"] },
-  { key: "avgSentenceLength", historicKey: "historicAvgSentenceLength", lines: ["Lungime Medie", "Propozi\u021bii"] },
-  { key: "verbDensity", historicKey: "historicVerbDensity", lines: ["Densitate", "Verbe"] },
-  { key: "adjectiveDensity", historicKey: "historicAdjectiveDensity", lines: ["Densitate", "Adjective"] },
-  { key: "punctuationUsage", historicKey: "historicPunctuationUsage", lines: ["Utilizare", "Punctua\u021bie"] },
+  { key: "lexicalDiversity", historicKey: "historicLexicalDiversity", axisKey: "axisLexical" },
+  { key: "avgSentenceLength", historicKey: "historicAvgSentenceLength", axisKey: "axisSentence" },
+  { key: "verbDensity", historicKey: "historicVerbDensity", axisKey: "axisVerbs" },
+  { key: "adjectiveDensity", historicKey: "historicAdjectiveDensity", axisKey: "axisAdjs" },
+  { key: "punctuationUsage", historicKey: "historicPunctuationUsage", axisKey: "axisPunct" },
 ] as const
 
 /**
@@ -626,32 +627,35 @@ function computeDeviation(score: StudentScore): number {
   return Math.min(100, Math.round((sum / 5) * 100))
 }
 
-function getDeviationTier(pct: number): { label: string; color: string; bg: string; message: string } {
+type TFn = (key: string, vars?: Record<string, string | number>) => string
+
+function getDeviationTier(pct: number, t: TFn): { label: string; color: string; bg: string; message: string } {
   if (pct <= 40) {
     return {
-      label: "OK",
+      label: t("forensic.devOkLabel"),
       color: "#10B981",
       bg: "rgba(16,185,129,0.12)",
-      message: "Stil Consistent. Textul se potriveste perfect cu amprenta lingvistica istorica a elevului.",
+      message: t("forensic.devOkMsg"),
     }
   }
   if (pct <= 70) {
     return {
-      label: "Suspect",
+      label: t("forensic.devSuspectLabel"),
       color: "#F97316",
       bg: "rgba(249,115,22,0.12)",
-      message: "Anomalie Stilistica. Exista o abatere vizibila; posibil text editat masiv sau parafrazat.",
+      message: t("forensic.devSuspectMsg"),
     }
   }
   return {
-    label: "Foarte Suspect",
+    label: t("forensic.devCriticalLabel"),
     color: "#EF4444",
     bg: "rgba(239,68,68,0.12)",
-    message: "Ruptura de Autor. Deviatia este extrema; statistic imposibil ca elevul sa-si schimbe radical stilul. Probabil AI sau alt autor.",
+    message: t("forensic.devCriticalMsg"),
   }
 }
 
 function StylometricRadar({ score }: { score: StudentScore }) {
+  const { t } = useLanguage()
   const svgW = 520
   const svgH = 520
   const cx = svgW / 2
@@ -660,7 +664,7 @@ function StylometricRadar({ score }: { score: StudentScore }) {
   const levels = 5
 
   const deviation = computeDeviation(score)
-  const tier = getDeviationTier(deviation)
+  const tier = getDeviationTier(deviation, t)
 
   // Helper to get point on the radar
   const getPoint = (axisIndex: number, value: number) => {
@@ -726,7 +730,7 @@ function StylometricRadar({ score }: { score: StudentScore }) {
       <div className="mb-4 flex items-center gap-2">
         <Radar size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
         <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-          Radar Chart Stilometric
+          {t("forensic.radarTitle")}
         </h4>
       </div>
 
@@ -740,12 +744,12 @@ function StylometricRadar({ score }: { score: StudentScore }) {
       >
         <div className="flex flex-col items-center justify-center rounded-xl px-4 py-2 shrink-0" style={{ background: tier.color + "20" }}>
           <span className="text-2xl font-black leading-none" style={{ color: tier.color }}>{deviation}%</span>
-          <span className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: tier.color }}>Deviatie</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: tier.color }}>{t("forensic.devLabel")}</span>
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black uppercase tracking-wider" style={{ color: tier.color }}>
-              Deviatie Stilometrica — {tier.label}
+              {t("forensic.devBadge")} {tier.label}
             </span>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "var(--dash-muted)" }}>
@@ -851,8 +855,11 @@ function StylometricRadar({ score }: { score: StudentScore }) {
           {RADAR_AXES.map((axis, i) => {
             const props = getLabelProps(i)
             const lineHeight = 13
-            // Vertically center the two lines
             const startDy = -(lineHeight / 2)
+            const axisLabel = t(`radarTab.${axis.axisKey}`)
+            const spaceIdx = axisLabel.indexOf(" ")
+            const line1 = spaceIdx === -1 ? axisLabel : axisLabel.slice(0, spaceIdx)
+            const line2 = spaceIdx === -1 ? "" : axisLabel.slice(spaceIdx + 1)
             return (
               <text
                 key={axis.key}
@@ -863,8 +870,8 @@ function StylometricRadar({ score }: { score: StudentScore }) {
                 fontWeight="600"
                 fill="var(--dash-muted)"
               >
-                <tspan x={props.x} dy={startDy}>{axis.lines[0]}</tspan>
-                <tspan x={props.x} dy={lineHeight}>{axis.lines[1]}</tspan>
+                <tspan x={props.x} dy={startDy}>{line1}</tspan>
+                <tspan x={props.x} dy={lineHeight}>{line2}</tspan>
               </text>
             )
           })}
@@ -875,82 +882,77 @@ function StylometricRadar({ score }: { score: StudentScore }) {
       <div className="mt-4 flex items-center justify-center gap-6 text-xs" style={{ color: "var(--dash-muted)" }}>
         <span className="flex items-center gap-2">
           <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "#001F3F" }} />
-          Profil Istoric Elev
+          {t("forensic.radarLegendHistoric")}
         </span>
         <span className="flex items-center gap-2">
           <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "#F97316" }} />
-          Lucrarea Curentă
+          {t("forensic.radarLegendCurrent")}
         </span>
       </div>
 
       {/* SECTION 4: Automated Stylometric Analytics Grid — 5 dimensions */}
       <div className="mt-6 pt-6 border-t" style={{ borderColor: "var(--dash-border)" }}>
         <h5 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: "var(--dash-muted)" }}>
-          Analiza Stilometrică Detaliată
+          {t("forensic.stylometricDetails")}
         </h5>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* 1. Diversitate Lexicală (Type-Token Ratio) */}
           <div className="rounded-xl border p-4" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--dash-accent)" }}>
-              Diversitate Lexicală
+              {t("radarTab.axisLexical")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
               {score.lexicalDiversity.toFixed(1)}%
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              Media Istorică a Elevului: {score.historicLexicalDiversity.toFixed(1)}%
+              {t("forensic.historicAvg")} {score.historicLexicalDiversity.toFixed(1)}%
             </p>
           </div>
 
-          {/* 2. Lungime Medie Propoziții */}
           <div className="rounded-xl border p-4" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--dash-accent)" }}>
-              Lungime Medie Propoziții
+              {t("radarTab.axisSentence")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
               {score.avgSentenceLength.toFixed(1)} cuv.
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              Media Istorică a Elevului: {score.historicAvgSentenceLength.toFixed(1)} cuv.
+              {t("forensic.historicAvg")} {score.historicAvgSentenceLength.toFixed(1)} cuv.
             </p>
           </div>
 
-          {/* 3. Densitate Verbe */}
           <div className="rounded-xl border p-4" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--dash-accent)" }}>
-              Densitate Verbe
+              {t("radarTab.axisVerbs")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
               {score.verbDensity.toFixed(1)}%
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              Media Istorică a Elevului: {score.historicVerbDensity.toFixed(1)}%
+              {t("forensic.historicAvg")} {score.historicVerbDensity.toFixed(1)}%
             </p>
           </div>
 
-          {/* 4. Utilizare Punctuație */}
           <div className="rounded-xl border p-4" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--dash-accent)" }}>
-              Utilizare Punctuație
+              {t("radarTab.axisPunct")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
               {score.punctuationUsage.toFixed(1)}%
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              Media Istorică a Elevului: {score.historicPunctuationUsage.toFixed(1)}%
+              {t("forensic.historicAvg")} {score.historicPunctuationUsage.toFixed(1)}%
             </p>
           </div>
 
-          {/* 5. Densitate Adjective */}
           <div className="rounded-xl border p-4" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--dash-accent)" }}>
-              Densitate Adjective
+              {t("radarTab.axisAdjs")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
               {score.adjectiveDensity.toFixed(1)}%
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              Media Istorică a Elevului: {score.historicAdjectiveDensity.toFixed(1)}%
+              {t("forensic.historicAvg")} {score.historicAdjectiveDensity.toFixed(1)}%
             </p>
           </div>
         </div>
@@ -962,71 +964,71 @@ function StylometricRadar({ score }: { score: StudentScore }) {
 // ─── Tab 3: AI Classification & Risk Thresholds ──────────────────────────────
 
 function AiClassification({ score }: { score: StudentScore }) {
+  const { t } = useLanguage()
   const aiScore = score.aiScore
 
   const getClassification = () => {
     if (aiScore >= 75) {
       return {
-        level: "Alerta Critica",
+        level: t("forensic.aiClassCriticalTitle"),
         color: "#EF4444",
         bgColor: "rgba(239,68,68,0.08)",
         borderColor: "rgba(239,68,68,0.25)",
         icon: <ShieldAlert size={28} className="text-red-500" />,
-        description: "Text generat aproape sigur de AI. Structura frazelor este geometrica, potrivindu-se perfect cu sabloanele predictive.",
+        description: t("forensic.aiClassCriticalDesc"),
         range: "75% - 100%",
       }
     }
     if (aiScore >= 20) {
       return {
-        level: "Zona Gri / Suspect",
+        level: t("forensic.aiClassGreyTitle"),
         color: "#F59E0B",
         bgColor: "rgba(245,158,11,0.08)",
         borderColor: "rgba(245,158,11,0.25)",
         icon: <AlertTriangle size={28} className="text-amber-500" />,
-        description: "Text hibrid sau asistat. Structura uniformizata stilistic, indicand utilizarea AI-ului pentru reformulare.",
+        description: t("forensic.aiClassGreyDesc"),
         range: "20% - 74%",
       }
     }
     return {
-      level: "Zona Sigura",
+      level: t("forensic.aiClassSafeTitle"),
       color: "#10B981",
       bgColor: "rgba(16,185,129,0.08)",
       borderColor: "rgba(16,185,129,0.25)",
       icon: <CheckCircle2 size={28} className="text-emerald-500" />,
-      description: "Text Uman. Ritm natural, asimetric si dinamic.",
+      description: t("forensic.aiClassSafeDesc"),
       range: "Sub 20%",
     }
   }
 
   const classification = getClassification()
 
-  // All three zones for visual reference
   const zones = [
     {
       range: "75% - 100%",
-      label: "Alerta Critica",
+      label: t("forensic.aiClassCriticalTitle"),
       color: "#EF4444",
       bg: "rgba(239,68,68,0.06)",
       border: "rgba(239,68,68,0.18)",
-      desc: "Text generat aproape sigur de AI. Structura frazelor este geometrica, potrivindu-se perfect cu sabloanele predictive.",
+      desc: t("forensic.aiClassCriticalDesc"),
       active: aiScore >= 75,
     },
     {
       range: "20% - 74%",
-      label: "Zona Gri / Suspect",
+      label: t("forensic.aiClassGreyTitle"),
       color: "#F59E0B",
       bg: "rgba(245,158,11,0.06)",
       border: "rgba(245,158,11,0.18)",
-      desc: "Text hibrid sau asistat. Structura uniformizata stilistic, indicand utilizarea AI-ului pentru reformulare.",
+      desc: t("forensic.aiClassGreyDesc"),
       active: aiScore >= 20 && aiScore < 75,
     },
     {
       range: "Sub 20%",
-      label: "Zona Sigura",
+      label: t("forensic.aiClassSafeTitle"),
       color: "#10B981",
       bg: "rgba(16,185,129,0.06)",
       border: "rgba(16,185,129,0.18)",
-      desc: "Text Uman. Ritm natural, asimetric si dinamic.",
+      desc: t("forensic.aiClassSafeDesc"),
       active: aiScore < 20,
     },
   ]
@@ -1064,7 +1066,7 @@ function AiClassification({ score }: { score: StudentScore }) {
         <div className="flex items-center gap-2 mb-1">
           <Info size={14} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
           <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-            Praguri de Risc
+            {t("forensic.aiRiskThresholds")}
           </span>
         </div>
         {zones.map((zone) => (
@@ -1100,7 +1102,7 @@ function AiClassification({ score }: { score: StudentScore }) {
                     className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
                     style={{ background: `${zone.color}18`, color: zone.color }}
                   >
-                    Activ
+                    {t("forensic.aiActive")}
                   </span>
                 )}
               </div>
@@ -1187,6 +1189,7 @@ function WebScannerPanel({
   initialReport: RaportPlagiatWeb | null
   onReport?: (report: RaportPlagiatWeb) => void
 }) {
+  const { t } = useLanguage()
   const [rezultatPlagiatWeb, setRezultatPlagiatWeb] = useState<RaportPlagiatWeb | null>(
     initialReport,
   )
@@ -1251,10 +1254,10 @@ function WebScannerPanel({
       >
         <Globe size={32} className="animate-pulse" style={{ color: "var(--dash-accent)" }} />
         <p className="text-sm font-semibold" style={{ color: "var(--dash-fg)" }}>
-          Scanare Web Globală în curs pentru {studentName}…
+          {t("forensic.webScanningFor", { name: studentName })}
         </p>
         <p className="text-xs" style={{ color: "var(--dash-muted)" }}>
-          Gemini Flash + similitudine cosinus pe surse indexate
+          {t("forensic.webScanningSubtitle")}
         </p>
       </div>
     )
@@ -1273,7 +1276,7 @@ function WebScannerPanel({
           className="mt-3 rounded-lg px-4 py-2 text-xs font-bold text-white"
           style={{ background: "var(--dash-navy)" }}
         >
-          Reîncearcă scanarea
+          {t("forensic.webRetry")}
         </button>
       </div>
     )
@@ -1312,7 +1315,7 @@ function WebScannerPanel({
           className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50"
           style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)" }}
         >
-          {loading ? "Se scanează…" : "Re-scanează"}
+          {loading ? t("forensic.webScanning") : t("forensic.webRescan")}
         </button>
       </div>
 
@@ -1325,8 +1328,7 @@ function WebScannerPanel({
             color: "#92400E",
           }}
         >
-          Scan incomplet: Google Grounding nu a returnat URL-uri. Verifica{" "}
-          <code className="font-mono">GEMINI_API_KEY</code> în .env.local și apasă Re-scanează.
+          {t("forensic.webScanIncomplete")}
         </div>
       )}
 

@@ -23,6 +23,7 @@ import { resolveForensicScoreIds } from "@/lib/forensic-score-ids"
 import { fetchStylometryScan } from "@/lib/stylometry-client"
 import { stylometryMetricsToDbColumns } from "@/lib/stylometry-db-metrics"
 import type { StylometryMetrics, StylometryVerdict } from "@/lib/stylometry-types"
+import { useLanguage } from "@/lib/i18n/language-provider"
 
 function stilometricLabelFromDeviation(deviation: number): StudentScore["stilometric"] {
   return deviation >= 38 ? "Abatere Stilistica" : "Stil Consistent"
@@ -244,11 +245,11 @@ function aiColor(score: number) {
   return "#EF4444"
 }
 
-function aiLabel(score: number) {
+function aiLabel(score: number, t: (key: string) => string) {
   if (score === 0) return "\u2014"
-  if (score < 20) return "Scazut"
-  if (score < 75) return "Suspect"
-  return "Critic"
+  if (score < 20) return t("dashboardProfesor.aiLevelLow")
+  if (score < 75) return t("dashboardProfesor.aiLevelSuspect")
+  return t("dashboardProfesor.aiLevelCritical")
 }
 
 // ─── Create Assignment Modal ──────────────────────────────────────────────────
@@ -259,6 +260,7 @@ interface ModalProps {
 }
 
 function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState("")
   const [requirement, setRequirement] = useState("")
   const [details, setDetails] = useState("")
@@ -276,10 +278,9 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
   const calendarBtnRef = useRef<HTMLButtonElement>(null)
   const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0, width: 0 })
 
-  // Romanian day/month names
-  const DAYS_RO = ["Lu", "Ma", "Mi", "Jo", "Vi", "Sa", "Du"]
-  const MONTHS_RO = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"]
-  const DAYS_FULL_RO = ["Duminica", "Luni", "Marti", "Miercuri", "Joi", "Vineri", "Sambata"]
+  const DAYS_RO = [0,1,2,3,4,5,6].map(i => t(`daysShort.${i}`))
+  const MONTHS_RO = [0,1,2,3,4,5,6,7,8,9,10,11].map(i => t(`months.${i}`))
+  const DAYS_FULL_RO = [0,1,2,3,4,5,6].map(i => t(`daysFull.${i}`))
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate()
   const getFirstDayOfMonth = (year: number, month: number) => {
@@ -323,7 +324,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
   }
 
   const formattedDeadline = selectedDate
-    ? `${DAYS_FULL_RO[selectedDate.getDay()]}, ${selectedDate.getDate()} ${MONTHS_RO[selectedDate.getMonth()]} ${selectedDate.getFullYear()}, ora ${String(selectedHour).padStart(2, "0")}:${String(selectedMinute).padStart(2, "0")}`
+    ? `${DAYS_FULL_RO[selectedDate.getDay()]}, ${selectedDate.getDate()} ${MONTHS_RO[selectedDate.getMonth()]} ${selectedDate.getFullYear()}, ${t("dashboardProfesor.atTime")} ${String(selectedHour).padStart(2, "0")}:${String(selectedMinute).padStart(2, "0")}`
     : ""
 
   const isToday = (day: number) => {
@@ -368,9 +369,9 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
       >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--dash-border)" }}>
           <h2 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>
-            Creaza Tema Noua
+            {t("dashboardProfesor.modalTitle")}
           </h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label="Inchide">
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("common.close")}>
             <X size={16} style={{ color: "var(--dash-muted)" }} />
           </button>
         </div>
@@ -378,7 +379,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           {/* Class selector */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-              Clasa Tinta <span className="text-red-500">*</span>
+              {t("dashboardProfesor.fieldClass")} <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <BookOpen size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
@@ -397,9 +398,9 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           {/* Title */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-              Titlu <span className="text-red-500">*</span>
+              {t("dashboardProfesor.fieldTitle")} <span className="text-red-500">*</span>
             </label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Eseu - Revolutia Industriala" required
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("dashboardProfesor.placeholderTitle")} required
               className="rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors"
               style={{ borderColor: "var(--dash-border)", background: "var(--dash-bg)", color: "var(--dash-fg)" }}
             />
@@ -407,9 +408,9 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           {/* Requirement */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-              Descriere <span className="text-red-500">*</span>
+              {t("dashboardProfesor.fieldDesc")} <span className="text-red-500">*</span>
             </label>
-            <textarea value={requirement} onChange={(e) => setRequirement(e.target.value)} placeholder="Descrieti ce trebuie sa realizeze elevul..." required rows={3}
+            <textarea value={requirement} onChange={(e) => setRequirement(e.target.value)} placeholder={t("dashboardProfesor.placeholderDesc")} required rows={3}
               className="resize-none rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors"
               style={{ borderColor: "var(--dash-border)", background: "var(--dash-bg)", color: "var(--dash-fg)" }}
             />
@@ -417,7 +418,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           {/* Premium Deadline Calendar Picker */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-              Termen Limita <span className="text-red-500">*</span>
+              {t("dashboardProfesor.fieldDeadline")} <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <button
@@ -428,7 +429,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
                 style={{ borderColor: showCalendar ? "var(--dash-navy)" : "var(--dash-border)", background: "var(--dash-bg)", color: formattedDeadline ? "var(--dash-fg)" : "var(--dash-muted)" }}
               >
                 <Calendar size={15} style={{ color: showCalendar ? "var(--dash-navy)" : "var(--dash-muted)" }} aria-hidden="true" />
-                <span className="flex-1 truncate">{formattedDeadline || "Selectati data si ora..."}</span>
+                <span className="flex-1 truncate">{formattedDeadline || t("dashboardProfesor.placeholderDeadline")}</span>
                 <ChevronDown size={14} className="shrink-0 transition-transform" style={{ color: "var(--dash-muted)", transform: showCalendar ? "rotate(180deg)" : "rotate(0)" }} aria-hidden="true" />
               </button>
             </div>
@@ -461,13 +462,13 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
                       {/* Calendar Grid */}
                       <div className="flex-1 p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <button type="button" onClick={prevMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label="Luna anterioara">
+                          <button type="button" onClick={prevMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.prevMonthAria")}>
                             <ChevronLeft size={14} style={{ color: "var(--dash-fg)" }} />
                           </button>
                           <span className="text-xs font-bold" style={{ color: "var(--dash-fg)" }}>
                             {MONTHS_RO[calendarMonth.month]} {calendarMonth.year}
                           </span>
-                          <button type="button" onClick={nextMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label="Luna urmatoare">
+                          <button type="button" onClick={nextMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.nextMonthAria")}>
                             <ChevronRight size={14} style={{ color: "var(--dash-fg)" }} />
                           </button>
                         </div>
@@ -501,28 +502,28 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
 
                       {/* Hour/Minute Scroller */}
                       <div className="flex flex-col items-center gap-2 border-l px-4 py-4" style={{ borderColor: "var(--dash-border)", minWidth: "100px" }}>
-                        <span className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--dash-muted)" }}>Ora</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.calTime")}</span>
                         <div className="flex items-center gap-1">
                           <div className="flex flex-col items-center">
-                            <button type="button" onClick={() => setSelectedHour((h) => (h + 1) % 24)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label="Ora +1">
+                            <button type="button" onClick={() => setSelectedHour((h) => (h + 1) % 24)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.hourUpAria")}>
                               <ChevronDown size={12} className="rotate-180" style={{ color: "var(--dash-muted)" }} />
                             </button>
                             <div className="flex h-10 w-12 items-center justify-center rounded-lg text-lg font-black" style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy)" }}>
                               {String(selectedHour).padStart(2, "0")}
                             </div>
-                            <button type="button" onClick={() => setSelectedHour((h) => (h - 1 + 24) % 24)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label="Ora -1">
+                            <button type="button" onClick={() => setSelectedHour((h) => (h - 1 + 24) % 24)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.hourDownAria")}>
                               <ChevronDown size={12} style={{ color: "var(--dash-muted)" }} />
                             </button>
                           </div>
                           <span className="text-lg font-black" style={{ color: "var(--dash-navy)" }}>:</span>
                           <div className="flex flex-col items-center">
-                            <button type="button" onClick={() => setSelectedMinute((m) => (m + 1) % 60)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label="Minut +1">
+                            <button type="button" onClick={() => setSelectedMinute((m) => (m + 1) % 60)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.minuteUpAria")}>
                               <ChevronDown size={12} className="rotate-180" style={{ color: "var(--dash-muted)" }} />
                             </button>
                             <div className="flex h-10 w-12 items-center justify-center rounded-lg text-lg font-black" style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy)" }}>
                               {String(selectedMinute).padStart(2, "0")}
                             </div>
-                            <button type="button" onClick={() => setSelectedMinute((m) => (m - 1 + 60) % 60)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label="Minut -1">
+                            <button type="button" onClick={() => setSelectedMinute((m) => (m - 1 + 60) % 60)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.minuteDownAria")}>
                               <ChevronDown size={12} style={{ color: "var(--dash-muted)" }} />
                             </button>
                           </div>
@@ -535,7 +536,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
                             style={{ background: "rgba(16,185,129,0.1)" }}
                           >
                             <CheckCircle2 size={10} className="text-emerald-500" />
-                            <span className="text-[10px] font-semibold text-emerald-600">Selectat</span>
+                            <span className="text-[10px] font-semibold text-emerald-600">{t("dashboardProfesor.calSelected")}</span>
                           </motion.div>
                         )}
                       </div>
@@ -577,9 +578,9 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           {/* Details */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
-              Detalii Suplimentare
+              {t("dashboardProfesor.fieldDetails")}
             </label>
-            <input type="text" value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Ex: Minimum 3 surse, format .pdf"
+            <input type="text" value={details} onChange={(e) => setDetails(e.target.value)} placeholder={t("dashboardProfesor.placeholderDetails")}
               className="rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors"
               style={{ borderColor: "var(--dash-border)", background: "var(--dash-bg)", color: "var(--dash-fg)" }}
             />
@@ -587,10 +588,10 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 rounded-lg border py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
               style={{ borderColor: "var(--dash-border)", color: "var(--dash-muted)" }}>
-              Anuleaza
+              {t("dashboardProfesor.btnCancel")}
             </button>
             <button type="submit" className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white transition-colors hover:opacity-90" style={{ background: "var(--dash-navy)" }}>
-              Salveaza Tema
+              {t("dashboardProfesor.btnSave")}
             </button>
           </div>
         </form>
@@ -609,6 +610,7 @@ interface PreviewerProps {
 }
 
 function TextPreviewer({ studentName, fileName, text, onClose }: PreviewerProps) {
+  const { t } = useLanguage()
   return (
     <AnimatePresence>
       <motion.div className="fixed inset-0 z-50 flex justify-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -618,7 +620,7 @@ function TextPreviewer({ studentName, fileName, text, onClose }: PreviewerProps)
           style={{ background: "var(--dash-card)", borderLeft: "1px solid var(--dash-border)" }}
           initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          aria-label="Previzualizare lucrare"
+          aria-label={t("dashboardProfesor.previewAria")}
         >
           <div className="flex items-center justify-between gap-4 border-b px-6 py-4 shrink-0" style={{ borderColor: "var(--dash-border)", background: "var(--dash-navy)" }}>
             <div className="flex items-center gap-3 min-w-0">
@@ -628,7 +630,7 @@ function TextPreviewer({ studentName, fileName, text, onClose }: PreviewerProps)
                 <p className="text-xs truncate" style={{ color: "#93C5FD" }}>{fileName}</p>
               </div>
             </div>
-            <button onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-white/10 transition-colors" aria-label="Inchide previzualizarea">
+            <button onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-white/10 transition-colors" aria-label={t("dashboardProfesor.closePreview")}>
               <X size={16} className="text-blue-300" />
             </button>
           </div>
@@ -641,17 +643,17 @@ function TextPreviewer({ studentName, fileName, text, onClose }: PreviewerProps)
   )
 }
 
-// ─── AI Analysis Steps overlay ────────────────────────────────��───────────────
-
-const AI_STEPS = [
-  "Vectorizare documente...",
-  "Calculare similaritate cosinus...",
-  "Extragere amprente stilometrice...",
-  "Detectare sabloane AI predictive...",
-  "Generare raport de integritate...",
-]
+// ─── AI Analysis Steps overlay ────────────────────────────────────────────────
 
 function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
+  const { t } = useLanguage()
+  const AI_STEPS = [
+    t("dashboardProfesor.aiStep1"),
+    t("dashboardProfesor.aiStep2"),
+    t("dashboardProfesor.aiStep3"),
+    t("dashboardProfesor.aiStep4"),
+    t("dashboardProfesor.aiStep5"),
+  ]
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
 
@@ -683,7 +685,7 @@ function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
             <Cpu size={26} className="text-blue-400 animate-pulse" aria-hidden="true" />
           </div>
           <div className="flex flex-col items-center gap-3 text-center">
-            <p className="text-sm font-bold text-white">Analiza AI in desfasurare</p>
+            <p className="text-sm font-bold text-white">{t("dashboardProfesor.aiOverlayTitle")}</p>
             <AnimatePresence mode="wait">
               <motion.p key={step} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.3 }} className="text-xs" style={{ color: "#93C5FD" }}>
@@ -701,8 +703,8 @@ function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
       ) : (
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-3 text-center">
           <CheckCircle2 size={40} className="text-emerald-400" />
-          <p className="text-sm font-bold text-white">Analiza completa!</p>
-          <p className="text-xs" style={{ color: "#93C5FD" }}>Raportul a fost generat cu succes.</p>
+          <p className="text-sm font-bold text-white">{t("dashboardProfesor.aiOverlayDone")}</p>
+          <p className="text-xs" style={{ color: "#93C5FD" }}>{t("dashboardProfesor.aiOverlayDoneMsg")}</p>
         </motion.div>
       )}
     </motion.div>
@@ -712,6 +714,7 @@ function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
 // ─── KPI Cards (Sumar Clasa) — 4 Re-engineered Metric Cards ──────────────────
 
 function KPICards({ report, totalStudents, submittedCount }: { report: AnalysisReport; totalStudents: number; submittedCount: number }) {
+  const { t } = useLanguage()
   const students = Object.values(report.scores)
   
   // CARD 2: AI Risk - students with stylometric deviation > 70%
@@ -772,7 +775,7 @@ function KPICards({ report, totalStudents, submittedCount }: { report: AnalysisR
 
   const kpis = [
     {
-      label: "Status Predare — nu au predat tema",
+      label: t("dashboardProfesor.kpiNotSubmitted"),
       value: `${notSubmittedCount}/${totalStudents}`,
       subtext: "",
       color: notSubmittedCount === 0 ? "#10B981" : "#F59E0B",
@@ -781,25 +784,25 @@ function KPICards({ report, totalStudents, submittedCount }: { report: AnalysisR
       icon: <CheckCircle2 size={20} className={notSubmittedCount === 0 ? "text-emerald-500" : "text-amber-500"} />,
     },
     {
-      label: "Elevi cu Risc AI Critic",
+      label: t("dashboardProfesor.kpiAiRisk"),
       value: criticalCount,
-      subtext: "deviație > 70%",
+      subtext: t("dashboardProfesor.kpiAiRiskSub"),
       color: "#EF4444",
       bg: "rgba(239,68,68,0.08)",
       border: "rgba(239,68,68,0.2)",
       icon: <Brain size={20} className="text-red-500" />,
     },
     {
-      label: "Anomalii Stilometrice Detectate",
+      label: t("dashboardProfesor.kpiStylometric"),
       value: anomalyCount,
-      subtext: "deviație 41-70%",
+      subtext: t("dashboardProfesor.kpiStylometricSub"),
       color: "#F59E0B",
       bg: "rgba(245,158,11,0.08)",
       border: "rgba(245,158,11,0.2)",
       icon: <AlertTriangle size={20} className="text-amber-500" />,
     },
     {
-      label: "Elevi Suspectați de Copiat — similaritate ≥ 50%",
+      label: t("dashboardProfesor.kpiCollusion"),
       value: collusionStudents.size,
       subtext: "",
       color: "#8B5CF6",
@@ -838,10 +841,10 @@ function KPICards({ report, totalStudents, submittedCount }: { report: AnalysisR
 
 // ─── Risk Distribution Bar Chart (Section 2) ─────────────────────────────────
 
-const RISK_BRACKETS = [
-  { key: "sigur",   label: "0%–19%",   sublabel: "Sigur / Text Original",           fill: "#10b981", min: 0,  max: 19  },
-  { key: "suspect", label: "20%–74%",  sublabel: "Suspect / Parafrază Ridicată",    fill: "#f59e0b", min: 20, max: 74  },
-  { key: "critic",  label: "75%–100%", sublabel: "Risc Critic / Plagiat Probabil",  fill: "#ef4444", min: 75, max: 100 },
+const RISK_BRACKET_DEFS = [
+  { key: "sigur",   label: "0%–19%",   fill: "#10b981", min: 0,  max: 19  },
+  { key: "suspect", label: "20%–74%",  fill: "#f59e0b", min: 20, max: 74  },
+  { key: "critic",  label: "75%–100%", fill: "#ef4444", min: 75, max: 100 },
 ]
 
 function RiskDistributionChart({
@@ -853,6 +856,14 @@ function RiskDistributionChart({
   onFilterChange: (bracketKey: string | null) => void
   activeFilter: string | null
 }) {
+  const { t } = useLanguage()
+
+  const RISK_BRACKETS = [
+    { ...RISK_BRACKET_DEFS[0], sublabel: t("dashboardProfesor.riskSafe") },
+    { ...RISK_BRACKET_DEFS[1], sublabel: t("dashboardProfesor.riskSuspect") },
+    { ...RISK_BRACKET_DEFS[2], sublabel: t("dashboardProfesor.riskCritical") },
+  ]
+
   const students = Object.values(report.scores)
 
   const chartData = RISK_BRACKETS.map((b) => ({
@@ -875,7 +886,7 @@ function RiskDistributionChart({
       <div className="mb-5 flex items-center gap-2">
         <BarChart3 size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
         <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-          Distribuția Analitică a Scorurilor de Risc la Nivelul Clasei
+          {t("dashboardProfesor.chartTitle")}
         </h4>
         {activeFilter && (
           <button
@@ -884,7 +895,7 @@ function RiskDistributionChart({
             style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}
           >
             <X size={10} />
-            Resetează filtru
+            {t("dashboardProfesor.chartResetFilter")}
           </button>
         )}
       </div>
@@ -916,10 +927,10 @@ function RiskDistributionChart({
                   <p className="font-black mb-0.5" style={{ color: "var(--dash-fg)" }}>{d.label}</p>
                   <p style={{ color: "var(--dash-muted)" }}>{d.sublabel}</p>
                   <p className="mt-1.5 font-bold" style={{ color: d.fill }}>
-                    {d.count} {d.count === 1 ? "elev" : "elevi"}
+                    {d.count} {d.count === 1 ? t("dashboardProfesor.student1") : t("dashboardProfesor.studentsN")}
                   </p>
                   <p className="mt-0.5 text-[10px] italic" style={{ color: "var(--dash-muted)" }}>
-                    Click pentru a filtra tabelul
+                    {t("dashboardProfesor.chartClickFilter")}
                   </p>
                 </div>
               )
@@ -998,6 +1009,7 @@ function AssignmentDetail({
     { revalidateOnFocus: false }
   )
   
+  const { t, dateLocale } = useLanguage()
   const [isAnalysing, setIsAnalysing] = useState(false)
   const [isBulkAnalysing, setIsBulkAnalysing] = useState(false)
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
@@ -1041,7 +1053,7 @@ function AssignmentDetail({
   // BUG #2 FIX: apply chart bracket filter to submitted rows only
   const filteredRows = useMemo(() => {
     if (!chartFilter || !report) return allRows
-    const bracket = RISK_BRACKETS.find((b) => b.key === chartFilter)
+    const bracket = RISK_BRACKET_DEFS.find((b) => b.key === chartFilter)
     if (!bracket) return allRows
     return allRows.filter((row) => {
       if (row.type === "missing") return false
@@ -1166,9 +1178,24 @@ function AssignmentDetail({
     }
   }
 
-  const tableHeaders = hasReport && showReport
-    ? ["Nume Elev", "Clasa", "Data Incarcarii", "Status", "Scor AI %", "Similaritate Colegi", "Deviatie Stilometrica", "Actiuni"]
-    : ["Nume Elev", "Clasa", "Data Incarcarii", "Status", "Actiuni"]
+  const tableHeaderDefs = hasReport && showReport
+    ? [
+        { id: "student",     label: t("dashboardProfesor.colStudent") },
+        { id: "class",       label: t("dashboardProfesor.colClass") },
+        { id: "date",        label: t("dashboardProfesor.colDate") },
+        { id: "status",      label: t("dashboardProfesor.colStatus") },
+        { id: "aiScore",     label: t("dashboardProfesor.colAiScore") },
+        { id: "similarity",  label: t("dashboardProfesor.colSimilarity") },
+        { id: "stylometric", label: t("dashboardProfesor.colStylometric") },
+        { id: "actions",     label: t("dashboardProfesor.colActions") },
+      ]
+    : [
+        { id: "student",  label: t("dashboardProfesor.colStudent") },
+        { id: "class",    label: t("dashboardProfesor.colClass") },
+        { id: "date",     label: t("dashboardProfesor.colDate") },
+        { id: "status",   label: t("dashboardProfesor.colStatus") },
+        { id: "actions",  label: t("dashboardProfesor.colActions") },
+      ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -1182,7 +1209,7 @@ function AssignmentDetail({
         <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-slate-100"
           style={{ color: "var(--dash-muted)" }}>
           <ArrowLeft size={14} aria-hidden="true" />
-          Inapoi la teme
+          {t("dashboardProfesor.backToAssignments")}
         </button>
       </div>
 
@@ -1192,7 +1219,7 @@ function AssignmentDetail({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "rgba(59,130,246,0.1)", color: "var(--dash-accent)" }}>
-                Clasa {assignment.class_code}
+                {t("dashboardProfesor.classLabel", { code: assignment.class_code ?? "" })}
               </span>
             </div>
             <h2 className="text-lg font-bold" style={{ color: "var(--dash-fg)" }}>{assignment.title}</h2>
@@ -1202,16 +1229,15 @@ function AssignmentDetail({
           <div className="mt-3 flex items-center gap-1.5 shrink-0 sm:mt-0">
             <Calendar size={13} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
             <span className="text-xs" style={{ color: "var(--dash-muted)" }}>
-              Termen:{" "}
+              {t("dashboardProfesor.deadline")}{" "}
               <span className="font-semibold" style={{ color: "var(--dash-fg)" }}>
                 {(() => {
                   const d = new Date(assignment.deadline)
-                  const datePart = d.toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" })
-                  // Parse time from deadline string if it contains "T" (ISO), otherwise default to 23:59
+                  const datePart = d.toLocaleDateString(dateLocale, { day: "numeric", month: "long", year: "numeric" })
                   const timePart = assignment.deadline.includes("T")
-                    ? d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })
+                    ? d.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })
                     : "23:59"
-                  return `${datePart}, ora ${timePart}`
+                  return `${datePart}, ${t("dashboardProfesor.atTime")} ${timePart}`
                 })()}
               </span>
             </span>
@@ -1232,10 +1258,10 @@ function AssignmentDetail({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: "var(--dash-accent)" }}>
-              Material Suport
+              {t("dashboardProfesor.supportMaterial")}
             </p>
             <p className="text-sm font-semibold truncate" style={{ color: "var(--dash-fg)" }}>
-              {assignment.additional_filename ?? "Document suport"}
+              {assignment.additional_filename ?? t("dashboardProfesor.supportDoc")}
             </p>
           </div>
           <a
@@ -1246,7 +1272,7 @@ function AssignmentDetail({
             style={{ borderColor: "var(--dash-accent)", color: "var(--dash-accent)", background: "rgba(59,130,246,0.06)" }}
           >
             <ExternalLink size={12} aria-hidden="true" />
-            Vizualizeaza
+            {t("dashboardProfesor.viewBtn")}
           </a>
         </motion.div>
       )}
@@ -1263,10 +1289,10 @@ function AssignmentDetail({
             >
               <Loader2 size={32} className="animate-spin" style={{ color: "var(--dash-navy)" }} />
               <p className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-                Relansează analiza pentru clasă…
+                {t("dashboardProfesor.rerunningStatus")}
               </p>
               <p className="text-xs" style={{ color: "var(--dash-muted)" }}>
-                {bulkProgress.done} / {bulkProgress.total} elevi procesați
+                {t("dashboardProfesor.rerunningProgress", { done: bulkProgress.done, total: bulkProgress.total })}
               </p>
             </div>
           )}
@@ -1275,13 +1301,13 @@ function AssignmentDetail({
         <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "var(--dash-border)" }}>
           <div>
             <h3 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-              Predari Elevi — Clasa {assignment.class_code}
+              {t("dashboardProfesor.tableTitle", { code: assignment.class_code ?? "" })}
             </h3>
             <p className="text-xs mt-0.5" style={{ color: "var(--dash-muted)" }}>
-              {assnSubs.length} trimise &middot; {notSubmitted.length} netrimise
+              {t("dashboardProfesor.tableSent", { n: assnSubs.length })} &middot; {t("dashboardProfesor.tableNotSent", { n: notSubmitted.length })}
               {hasReport && (
                 <span className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(16,185,129,0.1)", color: "#10B981" }}>
-                  Analizat
+                  {t("dashboardProfesor.analysed")}
                 </span>
               )}
             </p>
@@ -1302,7 +1328,7 @@ function AssignmentDetail({
                   color: "var(--dash-navy)",
                   background: "rgba(59,130,246,0.06)",
                 }}
-                title="Reanalizează AI + stilometrie spaCy pentru toți elevii din tabel"
+                title={t("dashboardProfesor.rerunTitle")}
               >
                 {isBulkAnalysing ? (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -1310,8 +1336,8 @@ function AssignmentDetail({
                   <RefreshCw size={14} aria-hidden="true" />
                 )}
                 {isBulkAnalysing
-                  ? `Relansare… ${bulkProgress.done}/${bulkProgress.total}`
-                  : "Relansează Analiza AI Totală"}
+                  ? `${t("dashboardProfesor.rerunning")} ${bulkProgress.done}/${bulkProgress.total}`
+                  : t("dashboardProfesor.rerunAll")}
               </button>
             )}
             <button
@@ -1319,16 +1345,16 @@ function AssignmentDetail({
               disabled={isAnalysing || isBulkAnalysing || assnSubs.length === 0}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               style={{ background: hasReport ? (showReport ? "#10B981" : "var(--dash-navy)") : "var(--dash-navy)" }}
-              title={assnSubs.length === 0 ? "Nicio predare disponibila pentru analiza" : undefined}
+              title={assnSubs.length === 0 ? t("dashboardProfesor.noSubmissionTitle") : undefined}
             >
               <Brain size={14} aria-hidden="true" />
               {isAnalysing
-                ? "Analiza in desfasurare..."
+                ? t("dashboardProfesor.analyzing")
                 : hasReport
                   ? showReport
-                    ? "Ascunde Raport"
-                    : "Afiseaza Raport"
-                  : "Lanseaza Analiza AI"}
+                    ? t("dashboardProfesor.hideReport")
+                    : t("dashboardProfesor.showReport")
+                  : t("dashboardProfesor.launchAnalysis")}
             </button>
           </div>
         </div>
@@ -1337,20 +1363,19 @@ function AssignmentDetail({
           <table className="w-full table-fixed text-sm">
             <thead>
               <tr style={{ background: "rgba(0,31,63,0.03)", borderBottom: "1px solid var(--dash-border)" }}>
-                {tableHeaders.map((h) => {
-                  // Assign proportional widths based on column type
+                {tableHeaderDefs.map((h) => {
                   let widthClass = "w-auto"
-                  if (h === "Nume Elev") widthClass = hasReport && showReport ? "w-[15%]" : "w-[22%]"
-                  else if (h === "Clasa") widthClass = hasReport && showReport ? "w-[6%]" : "w-[10%]"
-                  else if (h === "Data Incarcarii") widthClass = hasReport && showReport ? "w-[12%]" : "w-[20%]"
-                  else if (h === "Status") widthClass = hasReport && showReport ? "w-[8%]" : "w-[14%]"
-                  else if (h === "Scor AI %") widthClass = "w-[12%]"
-                  else if (h === "Similaritate Colegi") widthClass = "w-[12%]"
-                  else if (h === "Deviatie Stilometrica") widthClass = "w-[12%]"
-                  else if (h === "Actiuni") widthClass = hasReport && showReport ? "w-[23%]" : "w-[34%]"
+                  if (h.id === "student") widthClass = hasReport && showReport ? "w-[15%]" : "w-[22%]"
+                  else if (h.id === "class") widthClass = hasReport && showReport ? "w-[6%]" : "w-[10%]"
+                  else if (h.id === "date") widthClass = hasReport && showReport ? "w-[12%]" : "w-[20%]"
+                  else if (h.id === "status") widthClass = hasReport && showReport ? "w-[8%]" : "w-[14%]"
+                  else if (h.id === "aiScore") widthClass = "w-[12%]"
+                  else if (h.id === "similarity") widthClass = "w-[12%]"
+                  else if (h.id === "stylometric") widthClass = "w-[12%]"
+                  else if (h.id === "actions") widthClass = hasReport && showReport ? "w-[23%]" : "w-[34%]"
                   return (
-                    <th key={h} className={`${widthClass} px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider truncate`} style={{ color: "var(--dash-muted)" }}>
-                      {h}
+                    <th key={h.id} className={`${widthClass} px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider truncate`} style={{ color: "var(--dash-muted)" }}>
+                      {h.label}
                     </th>
                   )
                 })}
@@ -1368,10 +1393,10 @@ function AssignmentDetail({
                         className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: "1px solid var(--dash-border)" }}>
                         <td className="px-4 py-3 font-semibold truncate" style={{ color: "var(--dash-fg)" }}>{s.studentName}</td>
                         <td className="px-4 py-3 text-xs" style={{ color: "var(--dash-muted)" }}>{assignment.class_code}</td>
-                        <td className="px-4 py-3 text-xs truncate" style={{ color: "var(--dash-muted)" }}>{new Date(s.submittedAt).toLocaleDateString("ro-RO")}</td>
+                        <td className="px-4 py-3 text-xs truncate" style={{ color: "var(--dash-muted)" }}>{new Date(s.submittedAt).toLocaleDateString(dateLocale)}</td>
                         <td className="px-4 py-3">
                           <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <CheckCircle2 size={11} aria-hidden="true" />Trimis
+                            <CheckCircle2 size={11} aria-hidden="true" />{t("dashboardProfesor.statusSent")}
                           </span>
                         </td>
 
@@ -1380,14 +1405,14 @@ function AssignmentDetail({
                             <td className="px-4 py-3">
                               <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold"
                                 style={{ color: aiColor(rScore.aiScore), borderColor: aiColor(rScore.aiScore) + "44", background: aiColor(rScore.aiScore) + "12" }}>
-                                {rScore.aiScore}% — {aiLabel(rScore.aiScore)}
+                                {rScore.aiScore}% — {aiLabel(rScore.aiScore, t)}
                               </span>
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
                                 rScore.similarity > 50 ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               }`}>
-                                {rScore.similarity > 50 ? "Suspect" : "OK"} ({rScore.similarity}%)
+                                {rScore.similarity > 50 ? t("dashboardProfesor.simSuspect") : t("dashboardProfesor.simOk")} ({rScore.similarity}%)
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -1399,10 +1424,10 @@ function AssignmentDetail({
                                     : "bg-red-50 text-red-700 border-red-200"
                               }`}>
                                 {rScore.stilometric === "Eroare analiză"
-                                  ? "Eroare analiză"
+                                  ? t("dashboardProfesor.stilError")
                                   : rScore.stilometric === "Stil Consistent"
-                                    ? "OK"
-                                    : "Suspect"}
+                                    ? t("dashboardProfesor.stilOk")
+                                    : t("dashboardProfesor.stilSuspect")}
                               </span>
                             </td>
                           </>
@@ -1413,8 +1438,8 @@ function AssignmentDetail({
                             <button onClick={() => setPreviewing({ studentName: s.studentName, fileName: s.fileName, text: s.text })}
                               className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                               style={{ borderColor: "var(--dash-border)", color: "var(--dash-accent)", background: "rgba(59,130,246,0.06)" }}
-                              aria-label={`Citeste lucrarea lui ${s.studentName}`}>
-                              <Eye size={11} aria-hidden="true" />Citeste
+                              aria-label={t("dashboardProfesor.readAria", { name: s.studentName })}>
+                              <Eye size={11} aria-hidden="true" />{t("dashboardProfesor.readBtn")}
                             </button>
                             {hasReport && showReport && rScore && (
                               <button
@@ -1430,8 +1455,8 @@ function AssignmentDetail({
                                 }
                                 className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                                 style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(0,31,63,0.06)" }}
-                                aria-label={`Mai multe detalii pentru ${s.studentName}`}>
-                                <Search size={11} aria-hidden="true" />Detalii
+                                aria-label={t("dashboardProfesor.detailsAria", { name: s.studentName })}>
+                                <Search size={11} aria-hidden="true" />{t("dashboardProfesor.detailsBtn")}
                               </button>
                             )}
                           </div>
@@ -1448,7 +1473,7 @@ function AssignmentDetail({
                       <td className="px-4 py-3 text-xs" style={{ color: "var(--dash-muted)" }}>&mdash;</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border-amber-200">
-                          <Clock size={11} aria-hidden="true" />Netrimis
+                          <Clock size={11} aria-hidden="true" />{t("dashboardProfesor.statusNotSent")}
                         </span>
                       </td>
                       {hasReport && showReport && (
@@ -1471,12 +1496,12 @@ function AssignmentDetail({
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t px-6 py-3" style={{ borderColor: "var(--dash-border)" }}>
             <span className="text-xs" style={{ color: "var(--dash-muted)" }}>
-              Pagina {page + 1} din {totalPages} ({allRows.length} elevi)
+              {t("dashboardProfesor.pagination", { page: page + 1, total: totalPages, count: allRows.length })}
             </span>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 disabled:opacity-30"
-                style={{ borderColor: "var(--dash-border)" }} aria-label="Pagina anterioara">
+                style={{ borderColor: "var(--dash-border)" }} aria-label={t("dashboardProfesor.prevPage")}>
                 <ChevronLeft size={14} style={{ color: "var(--dash-fg)" }} />
               </button>
               {Array.from({ length: totalPages }, (_, i) => (
@@ -1492,7 +1517,7 @@ function AssignmentDetail({
               ))}
               <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 disabled:opacity-30"
-                style={{ borderColor: "var(--dash-border)" }} aria-label="Pagina urmatoare">
+                style={{ borderColor: "var(--dash-border)" }} aria-label={t("dashboardProfesor.nextPage")}>
                 <ChevronRight size={14} style={{ color: "var(--dash-fg)" }} />
               </button>
             </div>
@@ -1517,7 +1542,7 @@ function AssignmentDetail({
           className="flex flex-col gap-6"
         >
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>Sumar Clasa</h3>
+            <h3 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.classSummary")}</h3>
           </div>
           <KPICards report={report} totalStudents={classStudents.length} submittedCount={assnSubs.length} />
         </motion.div>
@@ -1528,17 +1553,18 @@ function AssignmentDetail({
 
 // ─── Assignment List View ─────────────────────────────────────────────────────
 
-function AssignmentList({ 
-  assignments, 
+function AssignmentList({
+  assignments,
   classes,
-  onSelect, 
-  onNew 
-}: { 
+  onSelect,
+  onNew
+}: {
   assignments: Assignment[]
   classes: ClassInfo[]
   onSelect: (a: Assignment) => void
-  onNew: () => void 
+  onNew: () => void
 }) {
+  const { t, dateLocale } = useLanguage()
   const [filterClass, setFilterClass] = useState<string | "ALL">("ALL")
   const classOptions = classes.map(c => c.code)
 
@@ -1548,19 +1574,19 @@ function AssignmentList({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--dash-fg)" }}>Temele Mele</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--dash-muted)" }}>Gestionati temele clasei si analizati predarile.</p>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.myAssignments")}</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.myAssignmentsSubtitle")}</p>
         </div>
         <button onClick={onNew}
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 self-start sm:self-auto"
           style={{ background: "var(--dash-navy)" }}>
-          <Plus size={16} aria-hidden="true" />Creaza Tema Noua
+          <Plus size={16} aria-hidden="true" />{t("dashboardProfesor.newAssignment")}
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Filter size={14} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>Filtru clasa:</span>
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.filterClass")}</span>
         {(["ALL", ...classOptions] as const).map((c) => (
           <button key={c} onClick={() => setFilterClass(c)}
             className="rounded-full px-3 py-1 text-xs font-bold transition-all"
@@ -1569,7 +1595,7 @@ function AssignmentList({
               color: filterClass === c ? "#fff" : "var(--dash-muted)",
               border: `1px solid ${filterClass === c ? "var(--dash-navy)" : "var(--dash-border)"}`,
             }}>
-            {c === "ALL" ? "Toate" : c}
+            {c === "ALL" ? t("common.all") : c}
           </button>
         ))}
       </div>
@@ -1600,7 +1626,7 @@ function AssignmentList({
               </div>
               <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: "var(--dash-border)" }}>
                 <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--dash-muted)" }}>
-                  <Users size={12} aria-hidden="true" /><span>- predari</span>
+                  <Users size={12} aria-hidden="true" /><span>- {t("dashboardProfesor.submissionsLabel")}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--dash-muted)" }}>
                   <Calendar size={12} aria-hidden="true" />
@@ -1608,9 +1634,9 @@ function AssignmentList({
                     {(() => {
                       const d = new Date(a.deadline)
                       const timePart = a.deadline.includes("T")
-                        ? d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })
+                        ? d.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })
                         : "23:59"
-                      return `${d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" })}, ora ${timePart}`
+                      return `${d.toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}, ${t("dashboardProfesor.atTime")} ${timePart}`
                     })()}
                   </span>
                 </div>
@@ -1622,7 +1648,7 @@ function AssignmentList({
           <div className="col-span-2 flex flex-col items-center gap-3 rounded-2xl border border-dashed py-16 text-center" style={{ borderColor: "var(--dash-border)" }}>
             <AlertTriangle size={28} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
             <p className="text-sm" style={{ color: "var(--dash-muted)" }}>
-              {filterClass === "ALL" ? "Nu exista teme create. Apasati \"Creaza Tema Noua\" pentru a incepe." : `Nu exista teme pentru clasa ${filterClass}.`}
+              {filterClass === "ALL" ? t("dashboardProfesor.noAssignmentsAll") : t("dashboardProfesor.noAssignmentsClass", { class: filterClass })}
             </p>
           </div>
         )}
@@ -1711,6 +1737,7 @@ async function fetchStudentsByClass(classId: string): Promise<{ id: string; disp
 }
 
 export default function DashboardProfesor({ userId, displayName, classes }: DashboardProfesorProps) {
+  const { t } = useLanguage()
   // Fetch assignments using SWR
   const { data: assignments = [], mutate: mutateAssignments } = useSWR(
     `assignments-${userId}`,
@@ -1994,7 +2021,7 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
           <ShieldCheck size={22} className="text-blue-400" aria-hidden="true" />
           <span className="text-lg font-black tracking-tight">Veridict</span>
           <span className="ml-2 rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD" }}>
-            Portal Profesor
+            {t("dashboardProfesor.portalBadge")}
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -2005,8 +2032,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
             <button
               type="submit"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-white/10 hover:text-white transition-colors"
-              aria-label="Deconectare">
-              <LogOut size={14} aria-hidden="true" />Iesire
+              aria-label={t("dashboardProfesor.logoutAria")}>
+              <LogOut size={14} aria-hidden="true" />{t("common.logout")}
             </button>
           </form>
         </div>
