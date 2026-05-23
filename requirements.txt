@@ -1,10 +1,25 @@
+# Core ML / AI detection
 transformers>=4.40.0
 torch>=2.0.0
-protobuf>=4.25.0
-sentencepiece>=0.2.0
-langdetect>=1.0.9
+accelerate>=0.26.0        # required by transformers pipeline() for model loading
+safetensors>=0.4.0        # required to load modern HuggingFace models (.safetensors format)
+sentencepiece>=0.2.0      # tokenizer for xlm-roberta
+
+# Numeric / stats
 numpy>=1.26.0
+
+# Language detection
+langdetect>=1.0.9
+
+# Google Gemini web plagiarism
 google-genai>=1.0.0
+protobuf>=4.25.0          # required by google-genai
+
+# Web scraping
 beautifulsoup4>=4.12.0
 requests>=2.31.0
+
+# Stylometry (NLP)
 spacy>=3.7.0
+# NOTE: after pip install, also run:
+#   python -m spacy download ro_core_news_sm
