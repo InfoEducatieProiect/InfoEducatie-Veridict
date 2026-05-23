@@ -239,14 +239,14 @@ const ROWS_PER_PAGE = 10
 
 function aiColor(score: number) {
   if (score === 0) return "#94A3B8"
-  if (score < 40) return "#10B981"
+  if (score < 20) return "#10B981"
   if (score < 75) return "#F59E0B"
   return "#EF4444"
 }
 
 function aiLabel(score: number) {
   if (score === 0) return "\u2014"
-  if (score < 40) return "Scazut"
+  if (score < 20) return "Scazut"
   if (score < 75) return "Suspect"
   return "Critic"
 }
@@ -554,7 +554,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
               )}
             </AnimatePresence>
           </div>
-          {/* File picker */}
+          {/* File picker
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
               Incarca Document/Imagine Suport
@@ -573,7 +573,7 @@ function CreateAssignmentModal({ onClose, onSave }: ModalProps) {
                 </span>
               )}
             </div>
-          </div>
+          </div> */}
           {/* Details */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>
@@ -839,10 +839,9 @@ function KPICards({ report, totalStudents, submittedCount }: { report: AnalysisR
 // ─── Risk Distribution Bar Chart (Section 2) ─────────────────────────────────
 
 const RISK_BRACKETS = [
-  { key: "sigur",    label: "0%–24%",  sublabel: "Sigur / Text Original",       fill: "#10b981", min: 0,  max: 24  },
-  { key: "minim",    label: "25%–49%", sublabel: "Zonă Sigură / Risc Minim",    fill: "#10b981", min: 25, max: 49  },
-  { key: "suspect",  label: "50%–74%", sublabel: "Suspect / Parafrază Ridicată", fill: "#f59e0b", min: 50, max: 74  },
-  { key: "critic",   label: "75%–100%",sublabel: "Risc Critic / Plagiat Probabil",fill: "#ef4444", min: 75, max: 100 },
+  { key: "sigur",   label: "0%–19%",   sublabel: "Sigur / Text Original",           fill: "#10b981", min: 0,  max: 19  },
+  { key: "suspect", label: "20%–74%",  sublabel: "Suspect / Parafrază Ridicată",    fill: "#f59e0b", min: 20, max: 74  },
+  { key: "critic",  label: "75%–100%", sublabel: "Risc Critic / Plagiat Probabil",  fill: "#ef4444", min: 75, max: 100 },
 ]
 
 function RiskDistributionChart({
@@ -1282,7 +1281,7 @@ function AssignmentDetail({
               {assnSubs.length} trimise &middot; {notSubmitted.length} netrimise
               {hasReport && (
                 <span className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(16,185,129,0.1)", color: "#10B981" }}>
-                  Analizat &middot; {report.ranAt}
+                  Analizat
                 </span>
               )}
             </p>

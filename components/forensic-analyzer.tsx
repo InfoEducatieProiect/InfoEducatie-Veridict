@@ -976,7 +976,7 @@ function AiClassification({ score }: { score: StudentScore }) {
         range: "75% - 100%",
       }
     }
-    if (aiScore >= 40) {
+    if (aiScore >= 20) {
       return {
         level: "Zona Gri / Suspect",
         color: "#F59E0B",
@@ -984,7 +984,7 @@ function AiClassification({ score }: { score: StudentScore }) {
         borderColor: "rgba(245,158,11,0.25)",
         icon: <AlertTriangle size={28} className="text-amber-500" />,
         description: "Text hibrid sau asistat. Structura uniformizata stilistic, indicand utilizarea AI-ului pentru reformulare.",
-        range: "40% - 74%",
+        range: "20% - 74%",
       }
     }
     return {
@@ -994,7 +994,7 @@ function AiClassification({ score }: { score: StudentScore }) {
       borderColor: "rgba(16,185,129,0.25)",
       icon: <CheckCircle2 size={28} className="text-emerald-500" />,
       description: "Text Uman. Ritm natural, asimetric si dinamic.",
-      range: "Sub 40%",
+      range: "Sub 20%",
     }
   }
 
@@ -1012,22 +1012,22 @@ function AiClassification({ score }: { score: StudentScore }) {
       active: aiScore >= 75,
     },
     {
-      range: "40% - 74%",
+      range: "20% - 74%",
       label: "Zona Gri / Suspect",
       color: "#F59E0B",
       bg: "rgba(245,158,11,0.06)",
       border: "rgba(245,158,11,0.18)",
       desc: "Text hibrid sau asistat. Structura uniformizata stilistic, indicand utilizarea AI-ului pentru reformulare.",
-      active: aiScore >= 40 && aiScore < 75,
+      active: aiScore >= 20 && aiScore < 75,
     },
     {
-      range: "Sub 40%",
+      range: "Sub 20%",
       label: "Zona Sigura",
       color: "#10B981",
       bg: "rgba(16,185,129,0.06)",
       border: "rgba(16,185,129,0.18)",
       desc: "Text Uman. Ritm natural, asimetric si dinamic.",
-      active: aiScore < 40,
+      active: aiScore < 20,
     },
   ]
 
@@ -1084,7 +1084,7 @@ function AiClassification({ score }: { score: StudentScore }) {
               style={{ background: `${zone.color}18` }}
             >
               <span className="text-xs font-black" style={{ color: zone.color }}>
-                {zone.range.split(" ")[0] === "Sub" ? "<40" : zone.range.split("%")[0]}
+                {zone.range.split(" ")[0] === "Sub" ? "<20" : zone.range.split("%")[0]}
               </span>
             </div>
             <div className="flex flex-col gap-1">
