@@ -72,7 +72,8 @@
     "deleteFile": "Delete file {name}",
     "errInvalidFile": "File not accepted. Only .txt and .docx files under 20MB are allowed.",
     "errUpload": "Error processing file. Check the format and try again.",
-    "atTime": "at"
+    "atTime": "at",
+    "defaultTitle": "Assignment"
   },
   "dashboardProfesor": {
     "portalBadge": "Teacher Portal",
@@ -238,7 +239,13 @@
     "webSourcesTitle": "Geometric distance in the online index:",
     "webNote": "Note:",
     "webNoteText": "Manual verification of indicated links is recommended. The AI Grounding system identifies bibliographic correlations and related sources, but final evaluation requires human validation as data may vary.",
+    "webVerdictAuthentic": "✅ AUTHENTIC TEXT: Original text with respect to the public online index.",
+    "webVerdictDetected": "❌ DETECTED: Text sourced from the internet (Cosine Similarity: {pct}%).",
+    "webVerdictSuspect": "❓ SUSPECT: Partially similar structure or intelligent paraphrasing ({pct}%).",
     "webRetry": "Retry scan",
+    "webScanFailed": "Scan failed",
+    "webInvalidResponse": "Invalid server response",
+    "webScanError": "Scan error",
     "webScanIncomplete": "Incomplete scan: Google Grounding returned no URLs. Check GEMINI_API_KEY in .env.local and click Re-scan.",
     "globalGraphTitle": "Global Integrity Graph",
     "globalLegendSuspect": "Suspect (>50% sim.)",
@@ -262,13 +269,20 @@
     "historic": "Historic",
     "currentWork": "Current Work",
     "historicPrefix": "Historic:",
+    "verdictOkLabel": "Authentic Style",
+    "verdictOkMsg": "Natural human variation. The student used a slightly different topic or the text has a different length, but the base structural pattern remains unchanged.",
+    "verdictSuspectLabel": "Stylistic Change",
+    "verdictSuspectMsg": "Grey zone. Visible change in vocabulary or phrase structure. May indicate external help, partial copying, or translation from another language.",
+    "verdictAlertLabel": "Fraud Alert",
+    "verdictAlertMsg": "Major structural deviation. It is nearly impossible for the same student to simultaneously change verb density, adjectives, punctuation and sentence length by over 38%. Text likely AI-generated or fully copied.",
     "axisLexical": "Lexical Diversity",
     "axisSentence": "Sentence Length",
     "axisVerbs": "Verb Density",
     "axisAdjs": "Adjective Density",
     "axisPunct": "Punct. Usage",
     "missingIds": "Missing text or analysis identifiers.",
-    "analysisError": "Analysis error"
+    "analysisError": "Analysis error",
+    "wordsAbbr": " wds."
   },
   "months": {
     "0": "January", "1": "February", "2": "March", "3": "April",

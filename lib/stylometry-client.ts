@@ -61,7 +61,7 @@ export async function fetchStylometryScan(params: {
       error:
         data.error ??
         (res.ok
-          ? "Răspuns stilometrie incomplet"
+          ? `HTTP ${res.status} — incomplete stylometry response`
           : res.statusText || `HTTP ${res.status}`),
     }
   }

@@ -913,10 +913,10 @@ function StylometricRadar({ score }: { score: StudentScore }) {
               {t("radarTab.axisSentence")}
             </p>
             <p className="text-lg font-black" style={{ color: "var(--dash-fg)" }}>
-              {score.avgSentenceLength.toFixed(1)} cuv.
+              {score.avgSentenceLength.toFixed(1)}{t("radarTab.wordsAbbr")}
             </p>
             <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-              {t("forensic.historicAvg")} {score.historicAvgSentenceLength.toFixed(1)} cuv.
+              {t("forensic.historicAvg")} {score.historicAvgSentenceLength.toFixed(1)}{t("radarTab.wordsAbbr")}
             </p>
           </div>
 
@@ -1141,6 +1141,13 @@ function hitScorUnit(item: { scor?: number; score?: number }): number {
   return raw > 1 ? raw / 100 : raw
 }
 
+function translateVerdict(verdict: string, scorMaximPct: number, t: TFn): string {
+  if (verdict.startsWith("✅")) return t("forensic.webVerdictAuthentic")
+  if (verdict.startsWith("❌")) return t("forensic.webVerdictDetected", { pct: scorMaximPct })
+  if (verdict.startsWith("❓")) return t("forensic.webVerdictSuspect", { pct: scorMaximPct })
+  return verdict
+}
+
 function apiReportToUi(raw: {
   verdict: string
   scor_maxim: number
@@ -1220,16 +1227,16 @@ function WebScannerPanel({
           error?: string
         }
         if (!res.ok) {
-          throw new Error(data.error ?? "Scanare esuata")
+          throw new Error(data.error ?? t("forensic.webScanFailed"))
         }
         if (!data.report) {
-          throw new Error("Raspuns invalid de la server")
+          throw new Error(t("forensic.webInvalidResponse"))
         }
         const ui = apiReportToUi(data.report)
         setRezultatPlagiatWeb(ui)
         onReport?.(ui)
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Eroare la scanare")
+        setError(e instanceof Error ? e.message : t("forensic.webScanError"))
       } finally {
         setLoading(false)
       }
@@ -1306,7 +1313,7 @@ function WebScannerPanel({
     >
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs leading-relaxed max-w-xl" style={{ color: "var(--dash-muted)" }}>
-          {rezultatPlagiatWeb.verdict}
+          {translateVerdict(rezultatPlagiatWeb.verdict, scorMaximPct, t)}
         </p>
         <button
           type="button"
@@ -1346,10 +1353,10 @@ function WebScannerPanel({
           </div>
           <div>
             <p className="text-base font-black" style={{ color: "#065F46" }}>
-              TEXT AUTENTIC
+              {t("forensic.webAuthentic")}
             </p>
             <p className="mt-1.5 text-sm max-w-md leading-relaxed" style={{ color: "#047857" }}>
-              Nu s-au detectat potriviri în indexul public online.
+              {t("forensic.webNoMatches")}
             </p>
           </div>
         </motion.div>
@@ -1373,14 +1380,14 @@ function WebScannerPanel({
             </div>
             <div className="flex flex-col gap-1">
               <p className="text-sm font-black" style={{ color: "#B91C1C" }}>
-                {rezultatPlagiatWeb.verdict}
+                {translateVerdict(rezultatPlagiatWeb.verdict, scorMaximPct, t)}
               </p>
               <p className="text-xs leading-relaxed" style={{ color: "var(--dash-muted)" }}>
-                Scor maxim de potrivire:{" "}
+                {t("forensic.webMaxScore")}{" "}
                 <span className="font-bold" style={{ color: "#B91C1C" }}>{scorMaximPct}%</span>
                 {rezultatPlagiatWeb.sursa_principala && (
                   <>
-                    {" "}— Sursa principala:{" "}
+                    {" "}— {t("forensic.webPrimarySource")}{" "}
                     <a
                       href={rezultatPlagiatWeb.sursa_principala}
                       target="_blank"
@@ -1403,7 +1410,7 @@ function WebScannerPanel({
           >
             <div className="border-b px-5 py-3" style={{ borderColor: "var(--dash-border)", background: "rgba(0,31,63,0.03)" }}>
               <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--dash-fg)" }}>
-                Distanța geometrică în indexul online:
+                {t("forensic.webSourcesTitle")}
               </p>
             </div>
             <div className="flex flex-col divide-y" style={{ borderColor: "var(--dash-border)" }}>
@@ -1446,11 +1453,11 @@ function WebScannerPanel({
         className="flex items-start gap-3 rounded-xl border px-4 py-3"
         style={{ background: "#FFFBEB", borderColor: "#FDE68A", color: "#78350F" }}
         role="note"
-        aria-label="Nota de avertisment"
+        aria-label={t("forensic.webNote")}
       >
         <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
         <p className="text-xs leading-relaxed">
-          <span className="font-bold">Nota:</span> Se recomanda verificarea manuala a link-urilor indicate. Sistemul de Grounding AI identifica corelatii bibliografice si surse conexe, insa evaluarea finala necesita validare umana deoarece datele pot varia.
+          <span className="font-bold">{t("forensic.webNote")}</span> {t("forensic.webNoteText")}
         </p>
       </div>
     </motion.div>
@@ -1496,6 +1503,7 @@ function GlobalIntegrityGraph({
   integrityGraphEdges?: { a: string; b: string; sim: number }[]
   integrityGraphNodes?: string[]
 }) {
+  const { t } = useLanguage()
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
 
   const useLiveGraph =
@@ -1559,7 +1567,7 @@ function GlobalIntegrityGraph({
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Globe size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
         <h3 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-          Graful de Integritate Global
+          {t("forensic.globalGraphTitle")}
         </h3>
       </div>
 
@@ -1569,7 +1577,7 @@ function GlobalIntegrityGraph({
           height={SVG_H}
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           className="max-w-full"
-          aria-label="Graf de integritate global"
+          aria-label={t("forensic.globalGraphAria")}
           style={{ minWidth: 400 }}
         >
           {/* Edges — percentage badges always visible; offset toward centre to avoid node overlap */}
@@ -1635,7 +1643,7 @@ function GlobalIntegrityGraph({
                 onMouseLeave={() => setHoveredNode(null)}
                 onClick={() => onOpenForensicStudent?.(node.name)}
                 role="button"
-                aria-label={`Elev: ${node.name}${connectedNames.has(node.name) ? " — Suspect" : " — Curat"}`}
+                aria-label={`${t("forensic.nodeAria", { name: node.name })}${connectedNames.has(node.name) ? ` — ${t("forensic.nodeSuspect")}` : ` — ${t("forensic.nodeClean")}`}`}
               >
                 {/* Glow ring for hovered or current node */}
                 {(isHov || isCurrent) && (
@@ -1694,18 +1702,18 @@ function GlobalIntegrityGraph({
       <div className="mt-6 flex flex-wrap items-center gap-5 text-xs" style={{ color: "var(--dash-muted)" }}>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-full border-2" style={{ background: "#fff7ed", borderColor: "#f97316" }} />
-          Suspect (&gt;50% sim.)
+          {t("forensic.globalLegendSuspect")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-1 w-5 rounded" style={{ background: "#f97316" }} />
-          Conexiune (&gt;50%)
+          {t("forensic.globalLegendEdge")}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-full border-2" style={{ background: "#eff6ff", borderColor: "#3b82f6" }} />
-          Curat (fara conexiuni)
+          {t("forensic.globalLegendClean")}
         </span>
         <span className="ml-auto text-[10px] italic">
-          {edges.length} conexiuni detectate | {names.length - connectedNames.size} elevi curati
+          {t("forensic.globalStats", { edges: edges.length, clean: names.length - connectedNames.size })}
         </span>
       </div>
     </motion.div>
@@ -1714,15 +1722,15 @@ function GlobalIntegrityGraph({
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-const TABS = [
-  { id: "graph" as const, label: "Graf Similaritate", Icon: Network },
-  { id: "radar" as const, label: "Radar Stilometric", Icon: Radar },
-  { id: "classification" as const, label: "Clasificare AI", Icon: ShieldAlert },
-  { id: "webscanner" as const, label: "Scanare Web Globală", Icon: AlertTriangle },
-  { id: "globalinteg" as const, label: "Graf Integritate Global", Icon: Globe },
-]
+const TAB_SCHEMA = [
+  { id: "graph" as const, Icon: Network },
+  { id: "radar" as const, Icon: Radar },
+  { id: "classification" as const, Icon: ShieldAlert },
+  { id: "webscanner" as const, Icon: AlertTriangle },
+  { id: "globalinteg" as const, Icon: Globe },
+] as const
 
-type TabId = (typeof TABS)[number]["id"]
+type TabId = (typeof TAB_SCHEMA)[number]["id"]
 
 export default function ForensicAnalyzer({
   studentName,
@@ -1739,7 +1747,16 @@ export default function ForensicAnalyzer({
   onPlagiarismReport,
   onStylometryComplete,
 }: ForensicAnalyzerProps) {
+  const { t } = useLanguage()
   const [activeTab, setActiveTab] = useState<TabId>("graph")
+
+  const TAB_LABELS: Record<TabId, string> = {
+    graph: t("forensic.tabGraph"),
+    radar: t("forensic.tabRadar"),
+    classification: t("forensic.tabClassification"),
+    webscanner: t("forensic.tabWebScanner"),
+    globalinteg: t("forensic.tabGlobalGraph"),
+  }
 
   return (
     <motion.div
@@ -1761,10 +1778,10 @@ export default function ForensicAnalyzer({
             borderColor: "var(--dash-border)",
             color: "var(--dash-fg)",
           }}
-          aria-label="Inapoi la tabel"
+          aria-label={t("forensic.backToTable")}
         >
           <ArrowLeft size={16} aria-hidden="true" />
-          <span className="hidden sm:inline">Inapoi la Tabel</span>
+          <span className="hidden sm:inline">{t("forensic.backToTable")}</span>
         </button>
         <span className="text-xs select-none" style={{ color: "var(--dash-border)" }}>/</span>
         <span className="text-xs font-semibold truncate max-w-[200px]" style={{ color: "var(--dash-accent)" }}>
@@ -1779,10 +1796,10 @@ export default function ForensicAnalyzer({
       >
         <div>
           <h2 className="text-lg font-bold" style={{ color: "var(--dash-fg)" }}>
-            Analiza Forensica — {studentName}
+            {t("forensic.headerTitle", { name: studentName })}
           </h2>
           <p className="mt-0.5 text-sm" style={{ color: "var(--dash-muted)" }}>
-            Detalii complete privind integritatea lucrarii
+            {t("forensic.headerSubtitle")}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1793,7 +1810,7 @@ export default function ForensicAnalyzer({
               color: score.aiScore >= 75 ? "#EF4444" : score.aiScore >= 40 ? "#F59E0B" : "#10B981",
             }}
           >
-            Scor AI: {score.aiScore}%
+            {t("forensic.aiScoreLabel", { score: score.aiScore })}
           </span>
         </div>
       </div>
@@ -1805,7 +1822,7 @@ export default function ForensicAnalyzer({
         role="tablist"
       >
         <div className="flex flex-row justify-around w-full items-stretch gap-1">
-          {TABS.map((tab) => (
+          {TAB_SCHEMA.map((tab) => (
             <button
               key={tab.id}
               role="tab"
@@ -1818,7 +1835,7 @@ export default function ForensicAnalyzer({
               }}
             >
               <tab.Icon size={14} aria-hidden="true" />
-              {tab.label}
+              {TAB_LABELS[tab.id]}
             </button>
           ))}
         </div>

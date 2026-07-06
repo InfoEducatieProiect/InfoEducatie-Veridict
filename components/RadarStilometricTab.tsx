@@ -19,14 +19,10 @@ import {
   type StylometryMetrics,
   type StylometryVerdict,
 } from "@/lib/stylometry-types"
+import { useLanguage } from "@/lib/i18n/language-provider"
 
-const AXIS_CONFIG = [
-  { key: "ttr" as const, label: "Diversitate Lexicală" },
-  { key: "asl" as const, label: "Lungime Propoziții" },
-  { key: "verbs" as const, label: "Densitate Verbe" },
-  { key: "adjs" as const, label: "Densitate Adjective" },
-  { key: "punct" as const, label: "Punctuație" },
-]
+const AXIS_KEYS = ["ttr", "asl", "verbs", "adjs", "punct"] as const
+type AxisKey = (typeof AXIS_KEYS)[number]
 
 export interface RadarStilometricTabProps {
   studentName: string
@@ -51,38 +47,36 @@ export interface RadarStilometricTabProps {
 
 function hasMetrics(m?: StylometryMetrics | null): boolean {
   if (!m) return false
-  return AXIS_CONFIG.some((a) => Number.isFinite(m[a.key]) && m[a.key] > 0)
+  return AXIS_KEYS.some((key) => Number.isFinite(m[key]) && m[key] > 0)
 }
 
 function toChartRows(
   baseline: StylometryMetrics,
   current: StylometryMetrics,
+  axisConfig: { key: AxisKey; label: string }[],
 ) {
-  return AXIS_CONFIG.map((axis) => ({
+  return axisConfig.map((axis) => ({
     subject: axis.label,
     Istoric_Elev: baseline[axis.key],
     Lucrare_Curenta: current[axis.key],
   }))
 }
 
-function tooltipSeriesLabel(dataKey: string, seriesName?: string): string {
-  if (
-    dataKey === "Istoric_Elev" ||
-    seriesName === "Istoric" ||
-    seriesName === "Amprenta Istorică"
-  ) {
-    return "Istoric"
-  }
-  return "Lucrarea Curentă"
-}
-
 function radarDomain(
   baseline: StylometryMetrics,
   current: StylometryMetrics,
 ): [number, number] {
-  const vals = AXIS_CONFIG.flatMap((a) => [baseline[a.key], current[a.key]])
+  const vals = AXIS_KEYS.flatMap((key) => [baseline[key], current[key]])
   const max = Math.max(...vals, 1)
   return [0, Math.ceil(max * 1.15)]
+}
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string
+
+function getVerdictText(deviation: number, t: TFn): { label: string; message: string } {
+  if (deviation < 22) return { label: t("radarTab.verdictOkLabel"), message: t("radarTab.verdictOkMsg") }
+  if (deviation < 38) return { label: t("radarTab.verdictSuspectLabel"), message: t("radarTab.verdictSuspectMsg") }
+  return { label: t("radarTab.verdictAlertLabel"), message: t("radarTab.verdictAlertMsg") }
 }
 
 export default function RadarStilometricTab({
@@ -99,6 +93,16 @@ export default function RadarStilometricTab({
   autoRunOnMount = false,
   onAnalysisComplete,
 }: RadarStilometricTabProps) {
+  const { t } = useLanguage()
+
+  const axisConfig = useMemo(() => [
+    { key: "ttr" as const, label: t("radarTab.axisLexical") },
+    { key: "asl" as const, label: t("radarTab.axisSentence") },
+    { key: "verbs" as const, label: t("radarTab.axisVerbs") },
+    { key: "adjs" as const, label: t("radarTab.axisAdjs") },
+    { key: "punct" as const, label: t("radarTab.axisPunct") },
+  ], [t])
+
   const seeded = hasMetrics(initialMetrics)
 
   const [metrics, setMetrics] = useState<StylometryMetrics | null>(
@@ -126,8 +130,8 @@ export default function RadarStilometricTab({
 
   const chartData = useMemo(() => {
     if (!metrics || !baseline) return []
-    return toChartRows(baseline, metrics)
-  }, [metrics, baseline])
+    return toChartRows(baseline, metrics, axisConfig)
+  }, [metrics, baseline, axisConfig])
 
   const domain = useMemo(() => {
     if (!metrics || !baseline) return [0, 100] as [number, number]
@@ -152,7 +156,7 @@ export default function RadarStilometricTab({
 
   const runAnalysis = useCallback(async () => {
     if (!text.trim() || !analysisScoreId || !studentId) {
-      setError("Lipsesc textul sau identificatorii analizei.")
+      setError(t("radarTab.missingIds"))
       return
     }
 
@@ -171,7 +175,7 @@ export default function RadarStilometricTab({
       }
       applyScanResult(result)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Eroare la analiză")
+      setError(e instanceof Error ? e.message : t("radarTab.analysisError"))
     } finally {
       setLoading(false)
     }
@@ -181,6 +185,7 @@ export default function RadarStilometricTab({
     analysisScoreId,
     studentId,
     text,
+    t,
     applyScanResult,
   ])
 
@@ -235,7 +240,7 @@ export default function RadarStilometricTab({
           <div className="flex items-center gap-2">
             <Radar size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
             <h4 className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>
-              Radar Stilometric — {studentName}
+              {t("radarTab.title", { name: studentName })}
             </h4>
           </div>
           <button
@@ -248,7 +253,7 @@ export default function RadarStilometricTab({
             }}
           >
             <Zap size={14} className={loading ? "animate-pulse" : ""} aria-hidden="true" />
-            {loading ? "Se calculează…" : "⚡ Recalculează Raport Stilometric"}
+            {loading ? t("radarTab.calculating") : t("radarTab.recalcBtn")}
           </button>
         </div>
 
@@ -260,7 +265,7 @@ export default function RadarStilometricTab({
 
         {loading && !showReport && (
           <p className="mt-4 text-xs font-semibold" style={{ color: "var(--dash-muted)" }}>
-            Se extrage amprenta stilometrică (spaCy)…
+            {t("radarTab.extracting")}
           </p>
         )}
       </div>
@@ -284,15 +289,15 @@ export default function RadarStilometricTab({
                 className="text-[10px] font-bold uppercase tracking-wider mt-0.5"
                 style={{ color: verdict.color }}
               >
-                Deviatie
+                {t("radarTab.deviationLabel")}
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-black uppercase tracking-wider" style={{ color: verdict.color }}>
-                {verdict.emoji} {verdict.label}
+                {verdict.emoji} {getVerdictText(deviation, t).label}
               </span>
               <p className="text-xs leading-relaxed" style={{ color: "var(--dash-muted)" }}>
-                {verdict.message}
+                {getVerdictText(deviation, t).message}
               </p>
             </div>
           </motion.div>
@@ -320,21 +325,12 @@ export default function RadarStilometricTab({
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(value: number, _name: string, item) => {
-                    const payload = item?.payload as Record<string, unknown> | undefined
-                    const dataKey = String(item?.dataKey ?? "")
-                    const seriesName = String(item?.name ?? "")
-                    const label = tooltipSeriesLabel(dataKey, seriesName)
-                    const raw =
-                      dataKey === "Istoric_Elev"
-                        ? payload?.Istoric_Elev
-                        : payload?.Lucrare_Curenta
-                    const num = typeof raw === "number" ? raw : Number(value)
-                    return [`${num.toFixed(1)}`, label]
+                  formatter={(value: number, name: string) => {
+                    return [Number(value).toFixed(1), name]
                   }}
                 />
                 <RechartsRadar
-                  name="Istoric"
+                  name={t("radarTab.historic")}
                   dataKey="Istoric_Elev"
                   stroke="#3b82f6"
                   fill="#3b82f6"
@@ -342,7 +338,7 @@ export default function RadarStilometricTab({
                   strokeWidth={2}
                 />
                 <RechartsRadar
-                  name="Lucrarea Curentă"
+                  name={t("radarTab.currentWork")}
                   dataKey="Lucrare_Curenta"
                   stroke="#f97316"
                   fill="#f97316"
@@ -355,7 +351,7 @@ export default function RadarStilometricTab({
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-            {AXIS_CONFIG.map((axis) => (
+            {axisConfig.map((axis) => (
               <div
                 key={axis.key}
                 className="rounded-xl border p-4"
@@ -369,11 +365,11 @@ export default function RadarStilometricTab({
                 </p>
                 <p className="text-lg font-black" style={{ color: "#f97316" }}>
                   {metrics[axis.key].toFixed(1)}
-                  {axis.key === "asl" ? " cuv." : "%"}
+                  {axis.key === "asl" ? t("radarTab.wordsAbbr") : "%"}
                 </p>
                 <p className="text-[10px] mt-1" style={{ color: "var(--dash-muted)" }}>
-                  Istoric: {baseline[axis.key].toFixed(1)}
-                  {axis.key === "asl" ? " cuv." : "%"}
+                  {t("radarTab.historicPrefix")} {baseline[axis.key].toFixed(1)}
+                  {axis.key === "asl" ? t("radarTab.wordsAbbr") : "%"}
                 </p>
               </div>
             ))}

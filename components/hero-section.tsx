@@ -64,7 +64,7 @@ export default function HeroSection() {
           </h1>
 
           <p className="max-w-md text-base font-medium leading-relaxed text-muted-foreground sm:text-lg">
-            {t("hero.tagline").split("matematică").length > 1 ? (
+            {t("hero.tagline").includes(",") ? (
               <>
                 {t("hero.tagline").split(/,\s*/)[0]},{" "}
                 <span className="text-accent font-semibold">

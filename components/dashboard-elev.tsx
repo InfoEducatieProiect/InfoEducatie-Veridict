@@ -496,7 +496,7 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
     const assn = assignments.find((a) => a.id === s.assignment_id)
     return {
       ...s,
-      assignmentTitle: assn?.title ?? s.file_name ?? "Tema",
+      assignmentTitle: assn?.title ?? s.file_name ?? t("dashboardElev.defaultTitle"),
       className: assn?.class_code ?? classCode,
       deadline: assn?.deadline ?? "",
     }

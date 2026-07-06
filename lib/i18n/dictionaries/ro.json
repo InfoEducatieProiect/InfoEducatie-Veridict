@@ -72,7 +72,8 @@
     "deleteFile": "Șterge fișierul {name}",
     "errInvalidFile": "Fișier neacceptat. Sunt permise doar fișiere .txt și .docx sub 20MB.",
     "errUpload": "Eroare la procesarea fișierului. Verificați formatul și încercați din nou.",
-    "atTime": "ora"
+    "atTime": "ora",
+    "defaultTitle": "Temă"
   },
   "dashboardProfesor": {
     "portalBadge": "Portal Profesor",
@@ -238,7 +239,13 @@
     "webSourcesTitle": "Distanța geometrică în indexul online:",
     "webNote": "Notă:",
     "webNoteText": "Se recomandă verificarea manuală a link-urilor indicate. Sistemul de Grounding AI identifică corelații bibliografice și surse conexe, însă evaluarea finală necesită validare umană deoarece datele pot varia.",
+    "webVerdictAuthentic": "✅ TEXT AUTENTIC: Text original în raport cu indexul public online.",
+    "webVerdictDetected": "❌ ALERTĂ DETECTATĂ: Text preluat de pe internet (Similitudine Cosinus: {pct}%).",
+    "webVerdictSuspect": "❓ SUSPECT: Structură parțial similară sau parafrazare inteligentă ({pct}%).",
     "webRetry": "Reîncearcă scanarea",
+    "webScanFailed": "Scanare eșuată",
+    "webInvalidResponse": "Răspuns invalid de la server",
+    "webScanError": "Eroare la scanare",
     "webScanIncomplete": "Scan incomplet: Google Grounding nu a returnat URL-uri. Verifică GEMINI_API_KEY în .env.local și apasă Re-scanează.",
     "globalGraphTitle": "Graful de Integritate Global",
     "globalLegendSuspect": "Suspect (>50% sim.)",
@@ -262,13 +269,20 @@
     "historic": "Istoric",
     "currentWork": "Lucrarea Curentă",
     "historicPrefix": "Istoric:",
+    "verdictOkLabel": "Stil Autentic",
+    "verdictOkMsg": "Fluctuație naturală umană. Elevul a folosit o topică ușor diferită sau textul are altă lungime, dar tiparul structural de bază rămâne neschimbat.",
+    "verdictSuspectLabel": "Modificare Stilistică",
+    "verdictSuspectMsg": "Zonă gri. Schimbare vizibilă de vocabular sau structură a frazei. Poate indica ajutor extern, copiere parțială sau traducere din altă limbă.",
+    "verdictAlertLabel": "Alertă Fraudă",
+    "verdictAlertMsg": "Abatere structurală majoră. Este aproape imposibil ca același elev să își schimbe simultan densitatea de verbe, adjective, punctuație și lungimea frazelor cu peste 38%. Text probabil generat de AI sau copiat integral.",
     "axisLexical": "Diversitate Lexicală",
     "axisSentence": "Lungime Propoziții",
     "axisVerbs": "Densitate Verbe",
     "axisAdjs": "Densitate Adjective",
     "axisPunct": "Utilizare Punctuație",
     "missingIds": "Lipsesc textul sau identificatorii analizei.",
-    "analysisError": "Eroare la analiză"
+    "analysisError": "Eroare la analiță",
+    "wordsAbbr": " cuv."
   },
   "months": {
     "0": "Ianuarie", "1": "Februarie", "2": "Martie", "3": "Aprilie",

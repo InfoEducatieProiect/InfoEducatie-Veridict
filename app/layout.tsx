@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ro" className={`${inter.variable} bg-background`}>
+    <html lang="ro" suppressHydrationWarning className={`${inter.variable} bg-background`}>
       <head>
         {/* Anti-flash: read lang cookie before React hydrates */}
         <script
