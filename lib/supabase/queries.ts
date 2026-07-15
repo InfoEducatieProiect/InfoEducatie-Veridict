@@ -347,17 +347,25 @@ export async function createSubmission(data: {
 
 // ─── Analysis Functions ───────────────────────────────────────────────────────
 
-// Get student baselines
+// Get student baselines. Pass `studentIds` to fetch only the rows needed for one
+// assignment instead of the entire table (avoids a growing full-table scan).
 export async function getStudentBaselines(
   supabaseClient?: SupabaseClient,
+  studentIds?: string[],
 ): Promise<Record<string, StudentBaseline>> {
   const supabase = sb(supabaseClient)
-  const { data, error } = await supabase
-    .from("student_baselines")
-    .select("*")
-  
+  let query = supabase.from("student_baselines").select("*")
+
+  if (studentIds) {
+    const uniqueIds = [...new Set(studentIds.filter(Boolean))]
+    if (uniqueIds.length === 0) return {}
+    query = query.in("student_id", uniqueIds)
+  }
+
+  const { data, error } = await query
+
   if (error) throw error
-  
+
   const baselines: Record<string, StudentBaseline> = {}
   for (const b of data || []) {
     baselines[b.student_id] = b

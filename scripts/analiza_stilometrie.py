@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """
 Stylometric fingerprint via spaCy (ro_core_news_sm).
-stdin JSON: {"text": "...", "baseline": {...}|null}  → stdout JSON only.
+
+Two stdin modes (stdout JSON only):
+  - Single:  {"text": "...", "baseline": {...}|null}
+             → {"metrics", "deviation", "baseline_used"}
+  - Batch:   {"texts": [{"id","text","baseline"}, ...]}
+             → {"results": [{"id","metrics","deviation","baseline_used"}, ...]}
+
+Batch mode loads the spaCy model ONCE and streams all texts through
+`nlp.pipe`, so a whole class is analysed in a single process instead of
+one spawn (and one model reload) per student.
 """
 from __future__ import annotations
 
@@ -50,8 +59,7 @@ def _configure_utf8_streams() -> None:
             pass
 
 
-def extrage_amprenta_stilometrica_procentuala(text: str) -> dict[str, float]:
-    doc = nlp(text)
+def _metrics_from_doc(doc) -> dict[str, float]:
     tokenuri_cuvinte = [token for token in doc if token.is_alpha]
     total_cuvinte = len(tokenuri_cuvinte)
 
@@ -98,6 +106,71 @@ def calculeaza_deviatie_manhattan_normalizata(
     return round((1 / 5) * suma_deviatii_relative * 100, 2)
 
 
+def extrage_amprenta_stilometrica_procentuala(text: str) -> dict[str, float]:
+    """Amprenta pentru un singur text (modul single)."""
+    return _metrics_from_doc(nlp(text))
+
+
+def _baseline_dict_sau_curent(
+    baseline: object,
+    curent: dict[str, float],
+) -> dict[str, float]:
+    """Normalizează amprenta istorică; cade pe amprenta curentă dacă lipsește."""
+    if isinstance(baseline, dict) and any(
+        baseline.get(k) is not None for k in ("ttr", "asl", "verbs", "adjs", "punct")
+    ):
+        return {
+            "ttr": float(baseline.get("ttr") or 0),
+            "asl": float(baseline.get("asl") or 0),
+            "verbs": float(baseline.get("verbs") or 0),
+            "adjs": float(baseline.get("adjs") or 0),
+            "punct": float(baseline.get("punct") or 0),
+        }
+    return curent
+
+
+def _rezultat_din_metrics(
+    metrics: dict[str, float],
+    baseline: object,
+) -> dict[str, object]:
+    baseline_dict = _baseline_dict_sau_curent(baseline, metrics)
+    deviatie = calculeaza_deviatie_manhattan_normalizata(baseline_dict, metrics)
+    return {
+        "metrics": metrics,
+        "deviation": deviatie,
+        "baseline_used": baseline_dict,
+    }
+
+
+def _proceseaza_batch(items: list) -> None:
+    """O singură încărcare spaCy + nlp.pipe peste toată clasa."""
+    valide: list[tuple[str, str, object]] = []  # (id, text_curat, baseline)
+    rezultate: list[dict] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id", "") or "")
+        if not item_id:
+            continue
+        text_curat = re.sub(r"\s+", " ", str(item.get("text", "") or "")).strip()
+        if len(text_curat) < 5:
+            rezultate.append({"id": item_id, "error": "Text lipsă sau prea scurt."})
+            continue
+        valide.append((item_id, text_curat, item.get("baseline")))
+
+    if valide:
+        docs = nlp.pipe([t for (_id, t, _b) in valide])
+        for (item_id, _text, baseline), doc in zip(valide, docs):
+            try:
+                metrics = _metrics_from_doc(doc)
+                rezultate.append({"id": item_id, **_rezultat_din_metrics(metrics, baseline)})
+            except Exception as exc:  # noqa: BLE001 — izolare per-element
+                rezultate.append({"id": item_id, "error": str(exc)})
+
+    print(json.dumps({"results": rezultate}, ensure_ascii=False))
+
+
 def main() -> None:
     _configure_utf8_streams()
     try:
@@ -107,6 +180,12 @@ def main() -> None:
             sys.exit(1)
 
         payload = json.loads(raw_input)
+
+        texts = payload.get("texts") if isinstance(payload, dict) else None
+        if isinstance(texts, list):
+            _proceseaza_batch(texts)
+            return
+
         text = str(payload.get("text", "") or "")
         baseline = payload.get("baseline")
 

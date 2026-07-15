@@ -2,10 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Cpu, CheckCircle2 } from "lucide-react"
+import { Cpu, CheckCircle2, Loader2 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/language-provider"
 
-export default function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
+export default function AiAnalysisOverlay({
+  onDone,
+  progress,
+}: {
+  onDone: () => void
+  progress?: { done: number; total: number } | null
+}) {
   const { t } = useLanguage()
   const AI_STEPS = [
     t("dashboardProfesor.aiStep1"),
@@ -62,9 +68,31 @@ export default function AiAnalysisOverlay({ onDone }: { onDone: () => void }) {
         </>
       ) : (
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-3 text-center">
-          <CheckCircle2 size={40} className="text-emerald-400" />
-          <p className="text-sm font-bold text-white">{t("dashboardProfesor.aiOverlayDone")}</p>
-          <p className="text-xs" style={{ color: "#93C5FD" }}>{t("dashboardProfesor.aiOverlayDoneMsg")}</p>
+          {progress && progress.total > 0 ? (
+            <>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-blue-400/40 bg-blue-500/10">
+                {progress.done >= progress.total
+                  ? <CheckCircle2 size={26} className="text-emerald-400" aria-hidden="true" />
+                  : <Loader2 size={26} className="text-blue-400 animate-spin" aria-hidden="true" />}
+              </div>
+              <p className="text-sm font-bold text-white">{t("dashboardProfesor.aiOverlayTitle")}</p>
+              <p className="text-xs" style={{ color: "#93C5FD" }}>
+                {progress.done >= progress.total
+                  ? t("dashboardProfesor.rerunningFinalizing")
+                  : t("dashboardProfesor.rerunningProgress", { done: progress.done, total: progress.total })}
+              </p>
+              <div className="h-1.5 w-44 overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-blue-400 transition-all duration-300"
+                  style={{ width: `${Math.round((Math.min(progress.done, progress.total) / progress.total) * 100)}%` }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <Loader2 size={40} className="text-blue-400 animate-spin" aria-hidden="true" />
+              <p className="text-sm font-bold text-white">{t("dashboardProfesor.aiOverlayTitle")}</p>
+              <p className="text-xs" style={{ color: "#93C5FD" }}>{t("dashboardProfesor.aiOverlayDoneMsg")}</p>
+            </>
+          )}
         </motion.div>
       )}
     </motion.div>

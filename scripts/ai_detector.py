@@ -472,19 +472,25 @@ def main() -> None:
         json.dump({"error": "texts must be an array"}, sys.stdout)
         sys.exit(1)
 
+    total = len(texts)
+    # Progress goes to STDERR (stdout is reserved for the final JSON) so the TS
+    # wrapper can surface a real per-student counter. Format: "[progress] done/total".
+    print(f"[progress] 0/{total}", file=sys.stderr, flush=True)
+
     results: list[dict[str, Any]] = []
-    for item in texts:
+    for idx, item in enumerate(texts):
         item_id = str(item.get("id", ""))
         text = str(item.get("text", "") or "")
         if not text.strip():
             results.append({"id": item_id, "scor_combinat_ai": 0.0, "error": "empty_text"})
-            continue
-        try:
-            out = analizeaza_text_complet(text)
-            out["id"] = item_id
-            results.append(out)
-        except Exception as exc:
-            results.append({"id": item_id, "scor_combinat_ai": 0.0, "error": str(exc)})
+        else:
+            try:
+                out = analizeaza_text_complet(text)
+                out["id"] = item_id
+                results.append(out)
+            except Exception as exc:
+                results.append({"id": item_id, "scor_combinat_ai": 0.0, "error": str(exc)})
+        print(f"[progress] {idx + 1}/{total}", file=sys.stderr, flush=True)
 
     json.dump({"results": results}, sys.stdout)
 

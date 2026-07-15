@@ -10,6 +10,38 @@ export interface CazSuspect {
 }
 
 /**
+ * Sparse term-frequency profile: a word→count map plus the vector norm.
+ * Replaces the old dense full-vocabulary array — the cosine value is identical,
+ * but dot products iterate only the words a document actually contains
+ * (O(avgDocLen)) instead of the whole global vocabulary (O(V)).
+ */
+export interface SparseProfile {
+  freq: Map<string, number>
+  norma: number
+}
+
+export function buildSparseProfile(words: string[]): SparseProfile {
+  const freq = new Map<string, number>()
+  for (const w of words) freq.set(w, (freq.get(w) ?? 0) + 1)
+  let sumSq = 0
+  for (const c of freq.values()) sumSq += c * c
+  return { freq, norma: Math.sqrt(sumSq) }
+}
+
+/** Cosine similarity (0–1) between two sparse profiles, iterating the smaller map. */
+export function cosineSparse(p1: SparseProfile, p2: SparseProfile): number {
+  if (p1.norma === 0 || p2.norma === 0) return 0
+  const [small, large] =
+    p1.freq.size <= p2.freq.size ? [p1.freq, p2.freq] : [p2.freq, p1.freq]
+  let produs_scalar = 0
+  for (const [w, c] of small) {
+    const c2 = large.get(w)
+    if (c2 !== undefined) produs_scalar += c * c2
+  }
+  return produs_scalar / (p1.norma * p2.norma)
+}
+
+/**
  * Motor hibrid Cosinus + Jaccard pe fraze (parafrază).
  * `baza_date_elevi`: map nume elev → text lucrare.
  * `prag_suspect`: prag cosinus global (implicit 0.45).
@@ -18,20 +50,9 @@ export function analizeaza_clasa_avansat(
   baza_date_elevi: Record<string, string>,
   prag_suspect = 0.45
 ): CazSuspect[] {
-  const texte_tokenizate: Record<string, string[]> = {}
+  const profile_elevi: Record<string, SparseProfile> = {}
   for (const [nume, text] of Object.entries(baza_date_elevi)) {
-    texte_tokenizate[nume] = curata_si_sparge(text)
-  }
-
-  const vocabular_global = [
-    ...new Set(Object.values(texte_tokenizate).flatMap((words) => words)),
-  ]
-
-  const profile_elevi: Record<string, { vector: number[]; norma: number }> = {}
-  for (const [nume, cuvinte] of Object.entries(texte_tokenizate)) {
-    const vector = vocabular_global.map((cuvant) => cuvinte.filter((w) => w === cuvant).length)
-    const norma = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0))
-    profile_elevi[nume] = { vector, norma }
+    profile_elevi[nume] = buildSparseProfile(curata_si_sparge(text))
   }
 
   const cazuri_suspecte: CazSuspect[] = []
@@ -46,11 +67,7 @@ export function analizeaza_clasa_avansat(
 
       if (!p1 || !p2 || p1.norma === 0 || p2.norma === 0) continue
 
-      let produs_scalar = 0
-      for (let k = 0; k < vocabular_global.length; k++) {
-        produs_scalar += p1.vector[k] * p2.vector[k]
-      }
-      const scor = produs_scalar / (p1.norma * p2.norma)
+      const scor = cosineSparse(p1, p2)
 
       const fraze_elev1 = gaseste_fraze_similare_ideatic(
         baza_date_elevi[nume1],
@@ -73,34 +90,24 @@ export function analizeaza_clasa_avansat(
 
 export function buildCosineProfilesForStudents(studentTexts: Record<string, string>): {
   ids: string[]
-  vocabular_global: string[]
-  profile_elevi: Record<string, { vector: number[]; norma: number }>
+  profile_elevi: Record<string, SparseProfile>
 } {
-  const texte_tokenizate: Record<string, string[]> = {}
+  const ids: string[] = []
+  const profile_elevi: Record<string, SparseProfile> = {}
   for (const [id, text] of Object.entries(studentTexts)) {
     const t = (text ?? "").trim()
     if (!t) continue
-    texte_tokenizate[id] = curata_si_sparge(text)
+    ids.push(id)
+    profile_elevi[id] = buildSparseProfile(curata_si_sparge(text))
   }
-  const ids = Object.keys(texte_tokenizate)
-  const vocabular_global = [
-    ...new Set(Object.values(texte_tokenizate).flatMap((words) => words)),
-  ]
-  const profile_elevi: Record<string, { vector: number[]; norma: number }> = {}
-  for (const id of ids) {
-    const cuvinte = texte_tokenizate[id]
-    const vector = vocabular_global.map((cuvant) => cuvinte.filter((w) => w === cuvant).length)
-    const norma = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0))
-    profile_elevi[id] = { vector, norma }
-  }
-  return { ids, vocabular_global, profile_elevi }
+  return { ids, profile_elevi }
 }
 
 export function computePairwiseCosinePercentages(studentTexts: Record<string, string>): {
   maxByStudent: Record<string, number>
   edgesGte50: { sid1: string; sid2: string; pct: number }[]
 } {
-  const { ids, vocabular_global, profile_elevi } = buildCosineProfilesForStudents(studentTexts)
+  const { ids, profile_elevi } = buildCosineProfilesForStudents(studentTexts)
   const maxByStudent: Record<string, number> = {}
   for (const id of ids) maxByStudent[id] = 0
 
@@ -114,11 +121,7 @@ export function computePairwiseCosinePercentages(studentTexts: Record<string, st
       const p2 = profile_elevi[id2]
       if (!p1 || !p2 || p1.norma === 0 || p2.norma === 0) continue
 
-      let produs_scalar = 0
-      for (let k = 0; k < vocabular_global.length; k++) {
-        produs_scalar += p1.vector[k] * p2.vector[k]
-      }
-      const scor = produs_scalar / (p1.norma * p2.norma)
+      const scor = cosineSparse(p1, p2)
       const pct = Math.round(scor * 100)
       maxByStudent[id1] = Math.max(maxByStudent[id1] ?? 0, pct)
       maxByStudent[id2] = Math.max(maxByStudent[id2] ?? 0, pct)

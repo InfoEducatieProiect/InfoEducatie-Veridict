@@ -164,6 +164,7 @@
     "closePreview": "Close preview",
     "rerunningStatus": "Re-running analysis for class…",
     "rerunningProgress": "{done} / {total} students processed",
+    "rerunningFinalizing": "Finalizing stylometry & saving…",
     "student1": "student",
     "studentsN": "students",
     "submissionsLabel": "submissions",

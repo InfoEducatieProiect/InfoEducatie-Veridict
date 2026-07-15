@@ -14,7 +14,6 @@ import {
   type Assignment, type AnalysisReport, type StudentScore, type Submission,
   RISK_BRACKET_DEFS, ROWS_PER_PAGE, aiColor, aiLabel,
 } from "./types"
-import { runClassStylometryScan, type ClassSubmissionRow } from "@/lib/profesor-utils"
 import TextPreviewer from "./TextPreviewer"
 import AiAnalysisOverlay from "./AiAnalysisOverlay"
 import KPICards from "./KPICards"
@@ -78,7 +77,7 @@ export default function AssignmentDetail({
 
   const [isAnalysing, setIsAnalysing] = useState(false)
   const [isBulkAnalysing, setIsBulkAnalysing] = useState(false)
-  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
+  const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
   const [previewing, setPreviewing] = useState<{ studentName: string; fileName: string; text: string } | null>(null)
   const [page, setPage] = useState(0)
   const [chartFilter, setChartFilter] = useState<string | null>(null)
@@ -152,53 +151,80 @@ export default function AssignmentDetail({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignment_id: assignment.id }),
       })
-      const data = (await res.json().catch(() => ({}))) as { error?: string; report?: AnalysisReport }
-      if (!res.ok) throw new Error(data.error || res.statusText)
-      const nextReport = data.report
-      if (!nextReport) throw new Error("Missing report in response")
-      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: nextReport }))
+      // Validation/auth failures come back as plain JSON (non-2xx, not a stream).
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error || res.statusText)
+      }
+
+      // Success = NDJSON stream: {type:"progress"|"report"|"error", ...} per line.
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+      let finalReport: AnalysisReport | null = null
+      let streamError: string | null = null
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const line of lines) {
+          if (!line.trim()) continue
+          let evt: { type?: string; done?: number; total?: number; report?: AnalysisReport; error?: string }
+          try { evt = JSON.parse(line) } catch { continue }
+          if (evt.type === "progress") {
+            setAiProgress({ done: evt.done ?? 0, total: evt.total ?? 0 })
+          } else if (evt.type === "report") {
+            finalReport = evt.report ?? null
+          } else if (evt.type === "error") {
+            streamError = evt.error ?? "Analysis failed"
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError)
+      if (!finalReport) throw new Error("Missing report in response")
+      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: finalReport! }))
       mutate(`submissions-${assignment.id}`)
-      return nextReport
+      return finalReport
     } catch (err) {
       console.error("[Veridict] Analysis failed:", err)
       return null
+    } finally {
+      setAiProgress(null)
     }
   }
 
   const runBulkAnalysis = async () => {
     if (assnSubs.length === 0 || isAnalysing || isBulkAnalysing) return
     setIsBulkAnalysing(true)
-    setBulkProgress({ done: 0, total: assnSubs.length })
     try {
-      let currentReport = (await runAiAnalysis()) ?? analysisReports[assignment.id] ?? (await loadAnalysisReportForAssignment(assignment.id))
+      // /api/analyze-ai now returns the full report (AI + similarity + batched
+      // spaCy stylometry) in one request — no per-student stylometry loop.
+      const currentReport = (await runAiAnalysis()) ?? analysisReports[assignment.id] ?? (await loadAnalysisReportForAssignment(assignment.id))
       if (!currentReport) throw new Error("Nu s-a putut genera raportul de analiză")
-      const subs: ClassSubmissionRow[] = assnSubs.map((s) => ({ id: s.id, student_id: s.student_id, studentName: s.studentName, text: s.text }))
-      const withStylometry = await runClassStylometryScan(assignment.id, currentReport, subs, (done, total) => setBulkProgress({ done, total }))
-      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: withStylometry }))
+      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: currentReport }))
       setShowReport(true)
     } catch (err) {
       console.error("[Veridict] Bulk analysis failed:", err)
     } finally {
       setIsBulkAnalysing(false)
-      setBulkProgress({ done: 0, total: 0 })
     }
   }
 
   const handleAnalysisDone = async () => {
     try {
-      let nextReport = (await runAiAnalysis()) ?? analysisReports[assignment.id] ?? (await loadAnalysisReportForAssignment(assignment.id))
-      if (nextReport && assnSubs.length > 0) {
-        setBulkProgress({ done: 0, total: assnSubs.length })
-        const subs: ClassSubmissionRow[] = assnSubs.map((s) => ({ id: s.id, student_id: s.student_id, studentName: s.studentName, text: s.text }))
-        const withStylometry = await runClassStylometryScan(assignment.id, nextReport, subs, (done, total) => setBulkProgress({ done, total }))
-        setAnalysisReports((prev) => ({ ...prev, [assignment.id]: withStylometry }))
+      const nextReport = (await runAiAnalysis()) ?? analysisReports[assignment.id] ?? (await loadAnalysisReportForAssignment(assignment.id))
+      if (nextReport) {
+        setAnalysisReports((prev) => ({ ...prev, [assignment.id]: nextReport }))
       }
       setShowReport(true)
     } catch (err) {
       console.error("[Veridict] Analysis failed:", err)
     } finally {
       setIsAnalysing(false)
-      setBulkProgress({ done: 0, total: 0 })
     }
   }
 
@@ -283,12 +309,24 @@ export default function AssignmentDetail({
 
       <div className="relative overflow-hidden rounded-2xl border shadow-sm" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
         <AnimatePresence>
-          {isAnalysing && <AiAnalysisOverlay onDone={handleAnalysisDone} />}
+          {isAnalysing && <AiAnalysisOverlay onDone={handleAnalysisDone} progress={aiProgress} />}
           {isBulkAnalysing && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/75 backdrop-blur-sm" role="status" aria-live="polite">
               <Loader2 size={32} className="animate-spin" style={{ color: "var(--dash-navy)" }} />
               <p className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.rerunningStatus")}</p>
-              <p className="text-xs" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.rerunningProgress", { done: bulkProgress.done, total: bulkProgress.total })}</p>
+              {aiProgress && aiProgress.total > 0 && (
+                <>
+                  <p className="text-xs" style={{ color: "var(--dash-muted)" }}>
+                    {aiProgress.done >= aiProgress.total
+                      ? t("dashboardProfesor.rerunningFinalizing")
+                      : t("dashboardProfesor.rerunningProgress", { done: aiProgress.done, total: aiProgress.total })}
+                  </p>
+                  <div className="h-1.5 w-40 overflow-hidden rounded-full" style={{ background: "rgba(0,0,0,0.08)" }}>
+                    <div className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((Math.min(aiProgress.done, aiProgress.total) / aiProgress.total) * 100)}%`, background: "var(--dash-navy)" }} />
+                  </div>
+                </>
+              )}
             </div>
           )}
         </AnimatePresence>
@@ -312,7 +350,11 @@ export default function AssignmentDetail({
                 style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(59,130,246,0.06)" }}
                 title={t("dashboardProfesor.rerunTitle")}>
                 {isBulkAnalysing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-                {isBulkAnalysing ? `${t("dashboardProfesor.rerunning")} ${bulkProgress.done}/${bulkProgress.total}` : t("dashboardProfesor.rerunAll")}
+                {isBulkAnalysing
+                  ? (aiProgress && aiProgress.total > 0
+                      ? `${t("dashboardProfesor.rerunning")} ${Math.min(aiProgress.done, aiProgress.total)}/${aiProgress.total}`
+                      : t("dashboardProfesor.rerunning"))
+                  : t("dashboardProfesor.rerunAll")}
               </button>
             )}
             <button onClick={handleAiClick} disabled={isAnalysing || isBulkAnalysing || assnSubs.length === 0}

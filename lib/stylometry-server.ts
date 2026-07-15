@@ -19,6 +19,8 @@ export type { StylometryMetrics, StylometryVerdict } from "@/lib/stylometry-type
 export { buildStylometryVerdict } from "@/lib/stylometry-types"
 
 const PYTHON_TIMEOUT_MS = Number(process.env.STYLOMETRY_PYTHON_TIMEOUT_MS ?? 60_000)
+// Batch spawns ONE process for the whole class (model loads once) — allow more headroom.
+const BATCH_TIMEOUT_MS = Number(process.env.STYLOMETRY_BATCH_TIMEOUT_MS ?? 300_000)
 const PYTHON_BIN = process.env.PYTHON_PATH ?? "python"
 
 const METRIC_KEYS = ["ttr", "asl", "verbs", "adjs", "punct"] as const
@@ -219,6 +221,116 @@ function runStylometryPython(
         baseline: historicBaseline,
       }),
     )
+    child.stdin.end()
+  })
+}
+
+export interface StylometryBatchItem {
+  id: string
+  text: string
+  /** Historic baseline from `student_baselines`, or null. */
+  baseline: StylometryMetrics | null
+}
+
+export interface StylometryBatchEntry {
+  metrics: StylometryMetrics
+  deviation: number
+  baseline_used: StylometryMetrics
+}
+
+/**
+ * Batched spaCy stylometry — ONE Python spawn (one `ro_core_news_sm` load) for
+ * the whole class, mirroring `runHybridAiBatch`. Returns a map keyed by item id;
+ * items that failed inside Python are simply omitted so the caller can fall back.
+ * On a spawn/parse/timeout failure the returned map is empty (caller falls back).
+ */
+export async function runStylometryBatch(
+  items: StylometryBatchItem[],
+): Promise<Record<string, StylometryBatchEntry>> {
+  const payload = items
+    .map((it) => ({
+      id: it.id,
+      text: (it.text ?? "").trim(),
+      baseline: it.baseline,
+    }))
+    .filter((it) => it.id && it.text.length > 0)
+
+  if (payload.length === 0) return {}
+
+  return new Promise((resolve) => {
+    const child = spawn(PYTHON_BIN, [scriptPath()], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: pythonEnv(),
+    })
+
+    let stdout = ""
+    let stderr = ""
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM")
+      console.warn(`[stylometry-batch] timed out after ${BATCH_TIMEOUT_MS}ms`)
+      resolve({})
+    }, BATCH_TIMEOUT_MS)
+
+    child.stdout.setEncoding("utf8")
+    child.stderr.setEncoding("utf8")
+    child.stdout.on("data", (chunk: string | Buffer) => {
+      stdout += typeof chunk === "string" ? chunk : chunk.toString("utf8")
+    })
+    child.stderr.on("data", (chunk: string | Buffer) => {
+      stderr += typeof chunk === "string" ? chunk : chunk.toString("utf8")
+    })
+    child.on("error", (err) => {
+      clearTimeout(timer)
+      console.warn("[stylometry-batch] spawn failed:", err instanceof Error ? err.message : err)
+      resolve({})
+    })
+    child.on("close", (code) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        console.warn(
+          `[stylometry-batch] exited ${code}${stderr ? `: ${stderr.slice(-600)}` : ""}`,
+        )
+        resolve({})
+        return
+      }
+      try {
+        const parsed = JSON.parse(stdout.trim()) as {
+          results?: Array<Record<string, unknown>>
+          error?: string
+        }
+        if (parsed.error) {
+          console.warn("[stylometry-batch] python error:", parsed.error)
+          resolve({})
+          return
+        }
+        const out: Record<string, StylometryBatchEntry> = {}
+        for (const row of parsed.results ?? []) {
+          const id = String(row.id ?? "")
+          if (!id || row.error) continue
+          const metrics = metricsFromRow(
+            row.metrics as Partial<Record<StylometryMetricKey, number>>,
+          )
+          const baselineUsed = metricsFromRow(
+            row.baseline_used as Partial<Record<StylometryMetricKey, number>>,
+          )
+          if (!metrics) continue
+          out[id] = {
+            metrics,
+            deviation: round2(Number(row.deviation ?? 0)),
+            baseline_used: baselineUsed ?? metrics,
+          }
+        }
+        resolve(out)
+      } catch (e) {
+        console.warn(
+          "[stylometry-batch] parse failed:",
+          e instanceof Error ? e.message : String(e),
+        )
+        resolve({})
+      }
+    })
+
+    child.stdin.write(JSON.stringify({ texts: payload }))
     child.stdin.end()
   })
 }

@@ -164,6 +164,7 @@
     "closePreview": "Închide previzualizarea",
     "rerunningStatus": "Relansează analiza pentru clasă…",
     "rerunningProgress": "{done} / {total} elevi procesați",
+    "rerunningFinalizing": "Finalizează stilometria și salvează…",
     "student1": "elev",
     "studentsN": "elevi",
     "submissionsLabel": "predări",

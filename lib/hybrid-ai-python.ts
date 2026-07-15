@@ -47,8 +47,11 @@ function emptyResult(id: string): HybridAiResult {
   }
 }
 
+export type AiProgressCallback = (done: number, total: number) => void
+
 function runPythonBatch(
   texts: TextAnalysisInput[],
+  onProgress?: AiProgressCallback,
 ): Promise<Record<string, HybridAiResult>> {
   return new Promise((resolve, reject) => {
     const script = scriptPath()
@@ -59,6 +62,7 @@ function runPythonBatch(
 
     let stdout = ""
     let stderr = ""
+    let stderrLineBuf = ""
     const timer = setTimeout(() => {
       child.kill("SIGTERM")
       reject(new Error(`Python AI detector timed out after ${PYTHON_TIMEOUT_MS}ms`))
@@ -68,7 +72,18 @@ function runPythonBatch(
       stdout += chunk.toString()
     })
     child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString()
+      const text = chunk.toString()
+      stderr += text
+      // Parse "[progress] done/total" lines as they stream in.
+      stderrLineBuf += text
+      const lines = stderrLineBuf.split(/\r?\n/)
+      stderrLineBuf = lines.pop() ?? ""
+      if (onProgress) {
+        for (const line of lines) {
+          const m = line.match(/\[progress\]\s+(\d+)\/(\d+)/)
+          if (m) onProgress(Number(m[1]), Number(m[2]))
+        }
+      }
     })
     child.on("error", (err) => {
       clearTimeout(timer)
@@ -141,20 +156,24 @@ function runPythonBatch(
 /**
  * Batch hybrid AI scores keyed by submission id.
  * Falls back to TypeScript ensemble if Python/RoBERTa is unavailable.
+ * `onProgress(done, total)` fires per submission as the Python detector streams
+ * progress on stderr (used for the real "3/12" analysis counter).
  */
 export async function runHybridAiBatch(
   texts: TextAnalysisInput[],
+  onProgress?: AiProgressCallback,
 ): Promise<Record<string, HybridAiResult>> {
   const nonEmpty = texts.filter((t) => (t.text ?? "").trim().length > 0)
   if (nonEmpty.length === 0) return {}
 
   try {
-    const pythonResults = await runPythonBatch(nonEmpty)
+    const pythonResults = await runPythonBatch(nonEmpty, onProgress)
     const merged: Record<string, HybridAiResult> = {}
     for (const t of nonEmpty) {
       merged[t.id] =
         pythonResults[t.id] ?? { ...fallbackAnalyze(t.text), id: t.id }
     }
+    onProgress?.(nonEmpty.length, nonEmpty.length)
     return merged
   } catch (err) {
     console.warn(
@@ -165,6 +184,7 @@ export async function runHybridAiBatch(
     for (const t of nonEmpty) {
       fallback[t.id] = { ...fallbackAnalyze(t.text), id: t.id }
     }
+    onProgress?.(nonEmpty.length, nonEmpty.length)
     return fallback
   }
 }

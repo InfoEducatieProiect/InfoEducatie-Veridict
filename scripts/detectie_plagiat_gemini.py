@@ -124,6 +124,17 @@ def _api_key() -> str:
     return ""
 
 
+_GENAI_CLIENT: Any = None
+
+
+def _get_genai_client(key: str) -> Any:
+    """Single genai.Client per process — reused across grounded + fallback calls."""
+    global _GENAI_CLIENT
+    if _GENAI_CLIENT is None:
+        _GENAI_CLIENT = genai.Client(api_key=key)
+    return _GENAI_CLIENT
+
+
 def _curata_si_extrage_url_real(url: str) -> str:
     if not url or not isinstance(url, str):
         return ""
@@ -383,7 +394,7 @@ def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
     text_trim = (text_suspect or "").strip()
 
     try:
-        client = genai.Client(api_key=key)
+        client = _get_genai_client(key)
 
         instructiune = (
             "Find the exact public web sources (Wikipedia, news, encyclopedia, blog) "

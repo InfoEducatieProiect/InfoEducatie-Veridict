@@ -8,9 +8,17 @@ import {
   generateShingles,
   type CazSuspect,
 } from "./analysisEngine"
-import { runHybridAiBatch } from "./hybrid-ai-python"
+import { runHybridAiBatch, type AiProgressCallback } from "./hybrid-ai-python"
 import type { StudentBaseline } from "@/lib/supabase/queries"
 import type { AnalysisReport, StudentScore, SubmissionInput } from "./analysis-report"
+
+/** Report + reusable similarity intermediates, so persist doesn't recompute the O(n²) pass. */
+export interface BuiltAnalysis {
+  report: AnalysisReport
+  cazuri: CazSuspect[]
+  edgesGte50: { sid1: string; sid2: string; pct: number }[]
+  bazaByStudentId: Record<string, string>
+}
 
 function baselineFromRow(row: StudentBaseline | undefined): HistoricBaseline | null {
   if (!row || row.ttr == null || row.asl == null || row.verbs == null || row.adjs == null || row.punct == null) {
@@ -61,9 +69,11 @@ export async function buildAnalysisReport(
   assignmentId: string,
   submissions: SubmissionInput[],
   baselinesByStudentId: Record<string, StudentBaseline>,
-): Promise<AnalysisReport> {
+  onAiProgress?: AiProgressCallback,
+): Promise<BuiltAnalysis> {
   const hybridBySubmissionId = await runHybridAiBatch(
     submissions.map((s) => ({ id: s.id, text: s.text ?? "" })),
+    onAiProgress,
   )
 
   const bazaByStudentId: Record<string, string> = {}
@@ -135,10 +145,15 @@ export async function buildAnalysisReport(
   }
 
   return {
-    assignmentId,
-    ranAt: new Date().toISOString(),
-    scores,
-    graphEdges,
-    graphNodes,
+    report: {
+      assignmentId,
+      ranAt: new Date().toISOString(),
+      scores,
+      graphEdges,
+      graphNodes,
+    },
+    cazuri,
+    edgesGte50,
+    bazaByStudentId,
   }
 }

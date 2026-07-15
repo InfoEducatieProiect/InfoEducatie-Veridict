@@ -2,8 +2,6 @@ import "server-only"
 
 import type { HistoricBaseline } from "./assignment-store"
 import {
-  analizeaza_clasa_avansat,
-  computePairwiseCosinePercentages,
   directedPhrasesFromCaz,
   findCazForUnorderedPair,
   calculateManhattanDeviation,
@@ -14,6 +12,8 @@ import {
 } from "./analysisEngine"
 import { stylometryMetricsToDbColumns } from "./stylometry-db-metrics"
 import { buildAnalysisReport } from "./analysis-report-build"
+import { runStylometryBatch } from "./stylometry-server"
+import type { AiProgressCallback } from "./hybrid-ai-python"
 import type { AnalysisReport, SubmissionInput } from "./analysis-report"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
@@ -53,32 +53,48 @@ export async function persistAnalysisReport(
   supabase: SupabaseClient,
   assignmentId: string,
   submissions: SubmissionInput[],
+  onAiProgress?: AiProgressCallback,
 ): Promise<AnalysisReport> {
-  const baselinesByStudentId = await getStudentBaselines(supabase)
-  const report = await buildAnalysisReport(
+  const baselinesByStudentId = await getStudentBaselines(
+    supabase,
+    submissions.map((s) => s.studentId),
+  )
+  const built = await buildAnalysisReport(
     assignmentId,
     submissions,
     baselinesByStudentId,
+    onAiProgress,
+  )
+  const report = built.report
+
+  // Radar stilometric — batched spaCy for the whole class in ONE Python spawn
+  // (one `ro_core_news_sm` load), replacing the old per-submission client loop.
+  const styloBatch = await runStylometryBatch(
+    submissions.map((sub) => ({
+      id: sub.id,
+      text: sub.text ?? "",
+      baseline: baselineFromRow(baselinesByStudentId[sub.studentId]),
+    })),
   )
 
   const run = await getOrCreateAnalysisRun(assignmentId, supabase)
 
   const scoreRows = submissions.map((sub) => {
     const sc = report.scores[sub.studentName]
-    const dbBaseline = baselineFromRow(baselinesByStudentId[sub.studentId])
-    const stilometricDev = computedToDbStilometric(sub.studentName, sub.text ?? "", dbBaseline)
+    const spa = styloBatch[sub.id]
 
-    const rawStylo = computeRawStylometricPercentages(sub.text ?? "")
-    const dbStylo = stylometryMetricsToDbColumns(rawStylo)
-
-    console.log("[Stylometry Debug] persistAnalysisReport AI run", {
-      student: sub.studentName,
-      chartScaled: {
-        verbDensity: sc?.verbDensity,
-        adjectiveDensity: sc?.adjectiveDensity,
-      },
-      savedToDb: dbStylo,
-    })
+    let stilometricDev: number
+    let dbStylo: ReturnType<typeof stylometryMetricsToDbColumns>
+    if (spa) {
+      // Real spaCy metrics — identical to the old per-submission route output.
+      stilometricDev = spa.deviation
+      dbStylo = stylometryMetricsToDbColumns(spa.metrics)
+    } else {
+      // Fallback when Python/spaCy is unavailable: previous TS heuristic.
+      const dbBaseline = baselineFromRow(baselinesByStudentId[sub.studentId])
+      stilometricDev = computedToDbStilometric(sub.studentName, sub.text ?? "", dbBaseline)
+      dbStylo = stylometryMetricsToDbColumns(computeRawStylometricPercentages(sub.text ?? ""))
+    }
 
     return {
       analysis_run_id: run.id,
@@ -97,13 +113,9 @@ export async function persistAnalysisReport(
 
   const insertedScores = await saveAnalysisScores(scoreRows, supabase)
 
-  const bazaByStudentId: Record<string, string> = {}
-  for (const sub of submissions) {
-    const t = (sub.text ?? "").trim()
-    if (t) bazaByStudentId[sub.studentId] = t
-  }
-  const cazuri: CazSuspect[] = analizeaza_clasa_avansat(bazaByStudentId, 0.45)
-  const { edgesGte50 } = computePairwiseCosinePercentages(bazaByStudentId)
+  // Reuse the similarity pass already computed in buildAnalysisReport (no recompute).
+  const cazuri: CazSuspect[] = built.cazuri
+  const edgesGte50 = built.edgesGte50
 
   const insertedByStudentId = new Map(
     insertedScores.map((row) => [row.student_id, row]),
@@ -155,8 +167,35 @@ export async function persistAnalysisReport(
     const inserted = insertedByStudentId.get(sub.studentId)
     const sc = report.scores[sub.studentName]
     if (!sc || !inserted?.id) continue
+
+    // Overwrite the UI stylometry fields with the batched spaCy result so the
+    // radar renders accurate values straight from this single request.
+    const spa = styloBatch[sub.id]
+    const styloFields = spa
+      ? {
+          stylometryMetrics: spa.metrics,
+          stylometryBaseline: spa.baseline_used,
+          stilometricDeviation: spa.deviation,
+          stilometric:
+            spa.deviation >= 38
+              ? ("Abatere Stilistica" as const)
+              : ("Stil Consistent" as const),
+          lexicalDiversity: spa.metrics.ttr,
+          avgSentenceLength: spa.metrics.asl,
+          verbDensity: spa.metrics.verbs,
+          adjectiveDensity: spa.metrics.adjs,
+          punctuationUsage: spa.metrics.punct,
+          historicLexicalDiversity: spa.baseline_used.ttr,
+          historicAvgSentenceLength: spa.baseline_used.asl,
+          historicVerbDensity: spa.baseline_used.verbs,
+          historicAdjectiveDensity: spa.baseline_used.adjs,
+          historicPunctuationUsage: spa.baseline_used.punct,
+        }
+      : {}
+
     report.scores[sub.studentName] = {
       ...sc,
+      ...styloFields,
       analysisScoreId: inserted.id,
       studentId: sub.studentId,
       submissionId: sub.id,
