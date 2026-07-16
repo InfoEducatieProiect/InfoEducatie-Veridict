@@ -279,7 +279,7 @@ export default function AssignmentDetail({
       )}
 
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-slate-100" style={{ color: "var(--dash-muted)" }}>
+        <button onClick={onBack} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-slate-100 dark:hover:bg-white/5" style={{ color: "var(--dash-muted)" }}>
           <ArrowLeft size={14} aria-hidden="true" />{t("dashboardProfesor.backToAssignments")}
         </button>
       </div>
@@ -349,7 +349,7 @@ export default function AssignmentDetail({
         <AnimatePresence>
           {isAnalysing && <AiAnalysisOverlay onDone={handleAnalysisDone} progress={aiProgress} />}
           {isBulkAnalysing && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/75 backdrop-blur-sm" role="status" aria-live="polite">
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/75 dark:bg-slate-900/75 backdrop-blur-sm" role="status" aria-live="polite">
               <Loader2 size={32} className="animate-spin" style={{ color: "var(--dash-navy)" }} />
               <p className="text-sm font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.rerunningStatus")}</p>
               {aiProgress && aiProgress.total > 0 && (
@@ -527,7 +527,7 @@ export default function AssignmentDetail({
             </span>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 disabled:opacity-30"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-30"
                 style={{ borderColor: "var(--dash-border)" }} aria-label={t("dashboardProfesor.prevPage")}>
                 <ChevronLeft size={14} style={{ color: "var(--dash-fg)" }} />
               </button>
@@ -539,7 +539,7 @@ export default function AssignmentDetail({
                 </button>
               ))}
               <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 disabled:opacity-30"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-30"
                 style={{ borderColor: "var(--dash-border)" }} aria-label={t("dashboardProfesor.nextPage")}>
                 <ChevronRight size={14} style={{ color: "var(--dash-fg)" }} />
               </button>

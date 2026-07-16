@@ -6,7 +6,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "all": "All",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "themeLight": "Light mode",
+    "themeDark": "Dark mode"
   },
   "hero": {
     "tagline": "From suspicion, to mathematical certainty.",
@@ -42,6 +44,9 @@
     "assignmentsSubtitle": "Active assignments for class {code}. Click an assignment to upload your work.",
     "allDone": "All class assignments have been submitted. Well done!",
     "toSubmit": "To submit",
+    "typeTema": "Homework",
+    "typeTest": "Test",
+    "testUploadNote": "Upload your in-class paper.",
     "deadline": "Deadline",
     "urgent": "Urgent!",
     "daysLeft": "{days}d left",

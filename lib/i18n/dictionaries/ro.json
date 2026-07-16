@@ -6,7 +6,9 @@
     "cancel": "Anulează",
     "save": "Salvează",
     "all": "Toate",
-    "logout": "Ieșire"
+    "logout": "Ieșire",
+    "themeLight": "Mod luminos",
+    "themeDark": "Mod întunecat"
   },
   "hero": {
     "tagline": "De la suspiciune, la certitudine matematică.",
@@ -42,6 +44,9 @@
     "assignmentsSubtitle": "Teme active pentru clasa {code}. Apăsați pe o temă pentru a încărca lucrarea.",
     "allDone": "Toate temele clasei au fost predate. Bine lucrat!",
     "toSubmit": "De predat",
+    "typeTema": "Temă",
+    "typeTest": "Test",
+    "testUploadNote": "Încarcă lucrarea din clasă.",
     "deadline": "Termen Limită",
     "urgent": "Urgent!",
     "daysLeft": "{days}z rămase",

@@ -111,7 +111,7 @@ export default function LocalSimilarityGraph({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.08 }}
                   onClick={() => setSelectedPairKey(isSelected ? null : peer.name)}
-                  className="flex flex-col gap-1.5 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                  className="flex flex-col gap-1.5 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
                   style={{
                     background: isSelected ? "rgba(245,158,11,0.06)" : undefined,
                     borderLeft: isSelected ? "3px solid #F59E0B" : "3px solid transparent",

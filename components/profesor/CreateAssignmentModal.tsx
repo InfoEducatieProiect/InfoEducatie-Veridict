@@ -101,7 +101,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
       >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--dash-border)" }}>
           <h2 className="text-base font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.modalTitle")}</h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("common.close")}>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={t("common.close")}>
             <X size={16} style={{ color: "var(--dash-muted)" }} />
           </button>
         </div>
@@ -174,9 +174,9 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
                     <div className="flex">
                       <div className="flex-1 p-4">
                         <div className="flex items-center justify-between mb-3">
-                          <button type="button" onClick={prevMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.prevMonthAria")}><ChevronLeft size={14} style={{ color: "var(--dash-fg)" }} /></button>
+                          <button type="button" onClick={prevMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={t("dashboardProfesor.prevMonthAria")}><ChevronLeft size={14} style={{ color: "var(--dash-fg)" }} /></button>
                           <span className="text-xs font-bold" style={{ color: "var(--dash-fg)" }}>{MONTHS_RO[calendarMonth.month]} {calendarMonth.year}</span>
-                          <button type="button" onClick={nextMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors" aria-label={t("dashboardProfesor.nextMonthAria")}><ChevronRight size={14} style={{ color: "var(--dash-fg)" }} /></button>
+                          <button type="button" onClick={nextMonth} className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={t("dashboardProfesor.nextMonthAria")}><ChevronRight size={14} style={{ color: "var(--dash-fg)" }} /></button>
                         </div>
                         <div className="grid grid-cols-7 gap-0.5 mb-1">
                           {DAYS_RO.map((d) => <div key={d} className="flex h-7 items-center justify-center text-[10px] font-bold uppercase" style={{ color: "var(--dash-muted)" }}>{d}</div>)}
@@ -202,9 +202,9 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
                             { val: selectedMinute, set: setSelectedMinute, mod: 60, up: t("dashboardProfesor.minuteUpAria"), down: t("dashboardProfesor.minuteDownAria") }
                           ].map((item, k) => (
                             <div key={k} className="flex flex-col items-center">
-                              <button type="button" onClick={() => item.set((v: number) => (v + 1) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={item.up}><ChevronDown size={12} className="rotate-180" style={{ color: "var(--dash-muted)" }} /></button>
+                              <button type="button" onClick={() => item.set((v: number) => (v + 1) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={item.up}><ChevronDown size={12} className="rotate-180" style={{ color: "var(--dash-muted)" }} /></button>
                               <div className="flex h-10 w-12 items-center justify-center rounded-lg text-lg font-black" style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy)" }}>{String(item.val).padStart(2, "0")}</div>
-                              <button type="button" onClick={() => item.set((v: number) => (v - 1 + item.mod) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors" aria-label={item.down}><ChevronDown size={12} style={{ color: "var(--dash-muted)" }} /></button>
+                              <button type="button" onClick={() => item.set((v: number) => (v - 1 + item.mod) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={item.down}><ChevronDown size={12} style={{ color: "var(--dash-muted)" }} /></button>
                             </div>
                           ))}
                         </div>
@@ -233,7 +233,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
               style={{ borderColor: "var(--dash-border)", background: "var(--dash-bg)", color: "var(--dash-fg)" }} />
           </div>
           <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 rounded-lg border py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+            <button type="button" onClick={onClose} className="flex-1 rounded-lg border py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
               style={{ borderColor: "var(--dash-border)", color: "var(--dash-muted)" }}>{t("dashboardProfesor.btnCancel")}</button>
             <button type="submit" className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white transition-colors hover:opacity-90" style={{ background: "var(--dash-navy)" }}>{t("dashboardProfesor.btnSave")}</button>
           </div>

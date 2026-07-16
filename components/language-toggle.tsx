@@ -6,7 +6,7 @@ export default function LanguageToggle() {
   const { locale, setLocale } = useLanguage()
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] print:hidden flex items-center rounded-full border border-border bg-card/80 px-1 py-1 shadow-lg backdrop-blur-sm">
+    <div className="flex items-center rounded-full border border-border bg-card/80 px-1 py-1 shadow-lg backdrop-blur-sm">
       <button
         onClick={() => setLocale("ro")}
         aria-pressed={locale === "ro"}

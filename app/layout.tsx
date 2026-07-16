@@ -3,6 +3,8 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { LanguageProvider } from "@/lib/i18n/language-provider"
 import LanguageToggle from "@/components/language-toggle"
+import ThemeToggle from "@/components/theme-toggle"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,10 +41,15 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
-        <LanguageProvider>
-          <LanguageToggle />
-          {children}
-        </LanguageProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          <LanguageProvider>
+            <div className="fixed bottom-4 right-4 z-[100] flex items-center gap-2 print:hidden">
+              <ThemeToggle />
+              <LanguageToggle />
+            </div>
+            {children}
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
