@@ -36,6 +36,10 @@ interface ForensicAnalyzerProps {
   }) => void
   analysisScoreId: string
   studentId: string
+  /** Tab to open on mount (from the ?tab URL param); falls back to "graph". */
+  initialTab?: string
+  /** Fired when the user switches tabs, so the URL can be kept in sync. */
+  onTabChange?: (tab: TabId) => void
 }
 
 const TAB_SCHEMA = [
@@ -62,9 +66,13 @@ export default function ForensicAnalyzer({
   integrityGraphNodes,
   onPlagiarismReport,
   onStylometryComplete,
+  initialTab,
+  onTabChange,
 }: ForensicAnalyzerProps) {
   const { t } = useLanguage()
-  const [activeTab, setActiveTab] = useState<TabId>("graph")
+  const [activeTab, setActiveTab] = useState<TabId>(() =>
+    TAB_SCHEMA.some((x) => x.id === initialTab) ? (initialTab as TabId) : "graph",
+  )
 
   const TAB_LABELS: Record<TabId, string> = {
     graph:          t("forensic.tabGraph"),
@@ -135,7 +143,7 @@ export default function ForensicAnalyzer({
               key={tab.id}
               role="tab"
               aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); onTabChange?.(tab.id) }}
               className="flex flex-1 w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap"
               style={{
                 background: activeTab === tab.id ? "var(--dash-navy)" : "transparent",

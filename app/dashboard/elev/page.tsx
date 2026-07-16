@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import DashboardElev from "@/components/dashboard-elev"
@@ -36,11 +37,13 @@ export default async function ElevDashboardPage() {
   }
 
   return (
-    <DashboardElev 
-      userId={user.id}
-      displayName={profile.display_name}
-      classCode={classCode}
-      classId={profile.class_id || undefined}
-    />
+    <Suspense fallback={null}>
+      <DashboardElev
+        userId={user.id}
+        displayName={profile.display_name}
+        classCode={classCode}
+        classId={profile.class_id || undefined}
+      />
+    </Suspense>
   )
 }

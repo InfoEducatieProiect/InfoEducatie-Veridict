@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   UploadCloud, LogOut, ShieldCheck, FileText,
@@ -473,7 +474,9 @@ interface DashboardElevProps {
 }
 
 export default function DashboardElev({ userId, displayName, classCode, classId }: DashboardElevProps) {
-  const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null)
   const { t, dateLocale } = useLanguage()
 
@@ -482,6 +485,19 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
     () => fetchAssignments(classId!),
     { revalidateOnFocus: false }
   )
+
+  // URL is the source of truth: ?a=<assignmentId> opens the upload workspace.
+  // The "posted" success preview stays ephemeral (in-memory parsed file) and is
+  // intentionally not deep-linkable.
+  const aParam = searchParams.get("a")
+  const activeAssignment = useMemo(
+    () => assignments.find((a) => a.id === aParam) ?? null,
+    [assignments, aParam],
+  )
+  // When the assignment leaves the URL (Back / handleBack), drop any workspace state.
+  useEffect(() => {
+    if (!aParam) setWorkspace(null)
+  }, [aParam])
 
   const { data: submissions = [], isLoading: loadingSubmissions } = useSWR(
     `submissions-${userId}`,
@@ -513,8 +529,8 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
   }
 
   const handleBack = () => {
-    setActiveAssignment(null)
     setWorkspace(null)
+    router.push(pathname)
   }
 
   const isLoading = loadingAssignments || loadingSubmissions
@@ -612,7 +628,7 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                           <motion.button key={a.id}
                             initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
                             transition={{ delay: idx * 0.05, duration: 0.3 }}
-                            onClick={() => { setActiveAssignment(a); setWorkspace({ phase: "upload" }) }}
+                            onClick={() => { setWorkspace({ phase: "upload" }); router.push(`${pathname}?a=${a.id}`) }}
                             className="group flex flex-col gap-3 rounded-2xl border p-5 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
                             style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
                             <div className="flex items-center gap-3">

@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import DashboardProfesor from "@/components/dashboard-profesor"
@@ -28,10 +29,12 @@ export default async function ProfesorDashboardPage() {
     .order("code")
 
   return (
-    <DashboardProfesor 
-      userId={user.id}
-      displayName={profile.display_name}
-      classes={classes || []}
-    />
+    <Suspense fallback={null}>
+      <DashboardProfesor
+        userId={user.id}
+        displayName={profile.display_name}
+        classes={classes || []}
+      />
+    </Suspense>
   )
 }

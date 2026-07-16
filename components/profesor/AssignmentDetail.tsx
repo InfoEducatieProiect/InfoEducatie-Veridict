@@ -58,6 +58,10 @@ interface AssignmentDetailProps {
     submissionTexts: Record<string, string>,
     studentIdFromSubmission?: string,
   ) => void
+  /** Clicking "Detalii" only sets the URL; the URL then drives the forensic open. */
+  onRequestForensic: (submissionId: string) => void
+  /** ?sub from the URL — auto-opens the forensic view once data has loaded. */
+  requestedSubmissionId?: string
   showReport: boolean
   setShowReport: (v: boolean | ((prev: boolean) => boolean)) => void
 }
@@ -68,6 +72,8 @@ export default function AssignmentDetail({
   setAnalysisReports,
   onBack,
   onOpenForensic,
+  onRequestForensic,
+  requestedSubmissionId,
   showReport,
   setShowReport,
 }: AssignmentDetailProps) {
@@ -135,6 +141,24 @@ export default function AssignmentDetail({
     })
     return () => { cancelled = true }
   }, [assignment.id, setAnalysisReports])
+
+  // Cold deep-link / Back-Forward: when the URL carries ?sub, open the forensic
+  // view for that submission as soon as the report + submissions have loaded.
+  // Reuses the exact data path the "Detalii" button feeds, so no duplication.
+  const [autoOpenedSub, setAutoOpenedSub] = useState<string | null>(null)
+  useEffect(() => {
+    if (!requestedSubmissionId) { setAutoOpenedSub(null); return }
+    if (autoOpenedSub === requestedSubmissionId) return
+    if (!report) return
+    const target = submissions.find((s) => s.id === requestedSubmissionId)
+    if (!target) return
+    const studentName = target.student_name || "Unknown"
+    const rScore = report.scores[studentName]
+    if (!rScore) return
+    setShowReport(true)
+    onOpenForensic(studentName, rScore, assignment.id, target.id, submissionTexts, target.student_id)
+    setAutoOpenedSub(requestedSubmissionId)
+  }, [requestedSubmissionId, autoOpenedSub, report, submissions, submissionTexts, assignment.id, onOpenForensic, setShowReport])
 
   const isAnalyzed = hasReport && showReport
 
@@ -443,7 +467,7 @@ export default function AssignmentDetail({
                             </button>
                             {hasReport && showReport && rScore && (
                               <button
-                                onClick={() => onOpenForensic(s.studentName, rScore, assignment.id, s.id, submissionTexts, s.student_id)}
+                                onClick={() => onRequestForensic(s.id)}
                                 className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                                 style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(0,31,63,0.06)" }}
                                 aria-label={t("dashboardProfesor.detailsAria", { name: s.studentName })}>

@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { ShieldCheck, LogOut, Network } from "lucide-react"
+import { ShieldCheck, LogOut, Network, Loader2 } from "lucide-react"
 import useSWR from "swr"
 import { createClient } from "@/lib/supabase/client"
 import { signOut } from "@/app/actions/auth"
@@ -16,29 +17,6 @@ import AssignmentList from "./profesor/AssignmentList"
 import AssignmentDetail from "./profesor/AssignmentDetail"
 import CreateAssignmentModal from "./profesor/CreateAssignmentModal"
 import type { Assignment, AnalysisReport, StudentScore, ClassInfo, SchoolClass } from "./profesor/types"
-
-// ─── Nav state persistence ────────────────────────────────────────────────────
-
-type View = "list" | "detail"
-
-const STORAGE_KEY = "veridict_nav_state"
-
-interface PersistedNavState {
-  view: View
-  assignmentId: string | null
-  forensicStudentName: string | null
-}
-
-function saveNavState(state: PersistedNavState) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch { /* localStorage may be blocked */ }
-}
-
-function loadNavState(): PersistedNavState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as PersistedNavState) : null
-  } catch { return null }
-}
 
 // ─── Data fetchers ────────────────────────────────────────────────────────────
 
@@ -66,15 +44,49 @@ interface DashboardProfesorProps {
 
 export default function DashboardProfesor({ userId, displayName, classes }: DashboardProfesorProps) {
   const { t } = useLanguage()
-  const { data: assignments = [], mutate: mutateAssignments } = useSWR(
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const { data: assignments = [], mutate: mutateAssignments, isLoading: assignmentsLoading } = useSWR(
     `assignments-${userId}`,
     () => fetchAssignments(userId),
     { revalidateOnFocus: false }
   )
 
+  // ─── URL is the source of truth for navigation ──────────────────────────────
+  // /dashboard/profesor            → Level 1 (assignment list)
+  // ?a=<assignmentId>              → Level 2 (assignment detail)
+  // ?a=…&sub=<submissionId>        → Level 3 (forensic view)
+  // ?a=…&sub=…&tab=<tabId>         → forensic sub-tab
+  const aParam = searchParams.get("a")
+  const subParam = searchParams.get("sub")
+  const tabParam = searchParams.get("tab")
+
+  const selectedAssignment = useMemo(
+    () => assignments.find((a) => a.id === aParam) ?? null,
+    [assignments, aParam],
+  )
+  // While ?a is set but SWR hasn't resolved the assignment yet, show a loader
+  // instead of flashing the list.
+  const assignmentPending = !!aParam && !selectedAssignment && assignmentsLoading
+  const view: "list" | "detail" = selectedAssignment ? "detail" : "list"
+
+  // Rebuild the query string from the current params + patch (null keys dropped).
+  const navigate = (
+    patch: { a?: string | null; sub?: string | null; tab?: string | null },
+    mode: "push" | "replace" = "push",
+  ) => {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [key, value] of Object.entries(patch)) {
+      if (value == null) params.delete(key)
+      else params.set(key, value)
+    }
+    const qs = params.toString()
+    router[mode](qs ? `${pathname}?${qs}` : pathname)
+  }
+
   const [analysisReports, setAnalysisReports] = useState<Record<string, AnalysisReport>>({})
-  const [view, setView] = useState<View>("list")
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
   const [showModal, setShowModal] = useState(false)
 
   const [forensicData, setForensicData] = useState<{
@@ -96,34 +108,24 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     }))
   }
 
+  // Back/Forward that removes ?sub tears down the forensic (Level 3) view.
   useEffect(() => {
-    const saved = loadNavState()
-    if (!saved) return
-    if (saved.assignmentId) {
-      const found = assignments.find((a) => a.id === saved.assignmentId) ?? null
-      if (found) { setSelectedAssignment(found); setView("detail") }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (!subParam && forensicData) setForensicData(null)
+  }, [subParam, forensicData])
 
-  useEffect(() => {
-    saveNavState({ view, assignmentId: selectedAssignment?.id ?? null, forensicStudentName: forensicData?.studentName ?? null })
-  }, [view, selectedAssignment, forensicData])
+  // Level-2 selection → URL only. AssignmentDetail rebuilds the rich forensic
+  // state from the URL, so both clicks and cold deep-links share one path.
+  const handleSelect = (a: Assignment) => navigate({ a: a.id, sub: null, tab: null }, "push")
+  const handleBack = () => navigate({ a: null, sub: null, tab: null }, "push")
+  const handleBackFromForensic = () => navigate({ sub: null, tab: null }, "push")
 
-  useEffect(() => {
-    console.log("[v0] Testing Pipeline: Verificarea funcționalității butonului 'Inapoi la Tabel'...")
-    console.log("[v0] Buton Inapoi la Tabel: Funcționalitate verificată, complet responsivă și legată de dashboard-ul profesorului. View activ:", view)
-  }, [view])
+  // Detalii button → set ?sub (+ default tab). The URL drives the actual open.
+  const handleRequestForensic = (submissionId: string) =>
+    navigate({ sub: submissionId, tab: tabParam ?? "graph" }, "push")
 
-  const handleSelect = (a: Assignment) => {
-    setSelectedAssignment(a)
-    setForensicData(null)
-    setView("detail")
-  }
-
-  const handleBack = () => { setView("list"); setSelectedAssignment(null); setForensicData(null) }
-  const handleBackFromForensic = () => { setForensicData(null); setView("detail") }
-
+  // Builds the in-memory forensic payload. Invoked by AssignmentDetail's effect
+  // once the report + submissions are loaded and ?sub is present — never pushes
+  // history itself (the URL already reflects the target).
   const handleOpenForensic = (
     studentName: string,
     score: StudentScore,
@@ -145,7 +147,6 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
       analysisScoreId,
       studentId,
     })
-    setView("detail")
   }
 
   const handleStylometryReport = async (
@@ -249,7 +250,12 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-8 py-10">
         <AnimatePresence mode="wait">
-          {view === "list" && (
+          {assignmentPending && (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex justify-center py-24">
+              <Loader2 size={28} className="animate-spin" style={{ color: "var(--dash-navy)" }} aria-label={t("common.loading")} />
+            </motion.div>
+          )}
+          {view === "list" && !assignmentPending && (
             <motion.div key="list" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={{ duration: 0.25 }}>
               <AssignmentList assignments={assignments} classes={classes} onSelect={handleSelect} onNew={() => setShowModal(true)} />
             </motion.div>
@@ -263,6 +269,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                   setAnalysisReports={setAnalysisReports}
                   onBack={handleBack}
                   onOpenForensic={handleOpenForensic}
+                  onRequestForensic={handleRequestForensic}
+                  requestedSubmissionId={subParam ?? undefined}
                   showReport={getShowReport(selectedAssignment.id)}
                   setShowReport={(v) => setShowReport(selectedAssignment.id, v)}
                 />
@@ -275,6 +283,8 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                     stilometric: forensicData.score.stilometric === "Abatere Stilistica" ? "Abatere Stilistică" : "Stil Consistent",
                   }}
                   onBack={handleBackFromForensic}
+                  initialTab={tabParam ?? undefined}
+                  onTabChange={(tb) => navigate({ tab: tb }, "replace")}
                   assignmentId={forensicData.assignmentId}
                   submissionId={forensicData.submissionId}
                   analysisScoreId={forensicData.analysisScoreId}
