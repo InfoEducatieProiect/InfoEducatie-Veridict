@@ -203,7 +203,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
                           ].map((item, k) => (
                             <div key={k} className="flex flex-col items-center">
                               <button type="button" onClick={() => item.set((v: number) => (v + 1) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={item.up}><ChevronDown size={12} className="rotate-180" style={{ color: "var(--dash-muted)" }} /></button>
-                              <div className="flex h-10 w-12 items-center justify-center rounded-lg text-lg font-black" style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy)" }}>{String(item.val).padStart(2, "0")}</div>
+                              <div className="flex h-10 w-12 items-center justify-center rounded-lg text-lg font-black" style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy-text)" }}>{String(item.val).padStart(2, "0")}</div>
                               <button type="button" onClick={() => item.set((v: number) => (v - 1 + item.mod) % item.mod)} className="flex h-6 w-8 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" aria-label={item.down}><ChevronDown size={12} style={{ color: "var(--dash-muted)" }} /></button>
                             </div>
                           ))}
@@ -218,7 +218,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
                     </div>
                     {formattedDeadline && (
                       <div className="border-t px-4 py-2.5 text-center" style={{ borderColor: "var(--dash-border)", background: "rgba(0,31,63,0.02)" }}>
-                        <p className="text-xs font-semibold" style={{ color: "var(--dash-navy)" }}>{formattedDeadline}</p>
+                        <p className="text-xs font-semibold" style={{ color: "var(--dash-navy-text)" }}>{formattedDeadline}</p>
                       </div>
                     )}
                   </motion.div>

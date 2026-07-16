@@ -43,6 +43,7 @@
   --dash-bg:     #F1F5F9;
   --dash-card:   #FFFFFF;
   --dash-navy:   #001F3F;
+  --dash-navy-text: #001F3F; /* navy text on light chips; flips to white in dark */
   --dash-accent: #3B82F6;
   --dash-fg:     #0F172A;
   --dash-muted:  #64748B;
@@ -56,6 +57,7 @@
   --dash-bg:     #0B1220;
   --dash-card:   #14203A;
   --dash-navy:   #06182F;
+  --dash-navy-text: #FFFFFF; /* navy-on-light-chip text becomes white in dark mode */
   --dash-accent: #3B82F6;
   --dash-fg:     #E5EDF7;
   --dash-muted:  #94A3B8;

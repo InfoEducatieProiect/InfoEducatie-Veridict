@@ -276,6 +276,12 @@ function UploadWorkspace({
             <span>{t("dashboardElev.testUploadNote")}</span>
           </div>
         )}
+        {new Date(assignment.deadline).getTime() < Date.now() && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300" style={{ background: "rgba(245,158,11,0.14)" }}>
+            <AlertCircle size={14} aria-hidden="true" />
+            <span>{t("dashboardElev.lateSubmitNote")}</span>
+          </div>
+        )}
       </div>
 
       {errorMsg && <ErrorToast message={errorMsg} onClose={() => setErrorMsg(null)} closeLabel={t("dashboardElev.closeNotif")} />}
@@ -530,6 +536,8 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
     return Math.ceil(diff / (1000 * 60 * 60 * 24))
   }
 
+  const isPastDeadline = (deadline: string) => new Date(deadline).getTime() < Date.now()
+
   const handlePosted = (fileName: string, previewContent: string, isHtml: boolean) => {
     if (!activeAssignment) return
     setWorkspace({ phase: "posted", fileName, previewContent, isHtml })
@@ -641,6 +649,7 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                             {(() => {
                               const isTest = a.type === "test"
                               const TypeIcon = isTest ? GraduationCap : BookOpen
+                              const isPast = isPastDeadline(a.deadline)
                               return (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)" }}>
@@ -650,9 +659,16 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                                     <TypeIcon size={12} aria-hidden="true" />
                                     {isTest ? t("dashboardElev.typeTest") : t("dashboardElev.typeTema")}
                                   </span>
-                                  <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>
-                                    {t("dashboardElev.toSubmit")}
-                                  </span>
+                                  {isPast ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold text-red-600 dark:text-red-300" style={{ background: "rgba(239,68,68,0.16)" }}>
+                                      <AlertCircle size={12} aria-hidden="true" />
+                                      {t("dashboardElev.deadlinePassed")}
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>
+                                      {t("dashboardElev.toSubmit")}
+                                    </span>
+                                  )}
                                 </div>
                               )
                             })()}
@@ -671,14 +687,15 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                                 </span>
                               </div>
                               {(() => {
+                                if (isPastDeadline(a.deadline)) return null
                                 const days = daysUntil(a.deadline)
                                 if (days <= 1) return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">{t("dashboardElev.urgent")}</span>
                                 if (days <= 3) return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">{t("dashboardElev.daysLeft", { days })}</span>
                                 return null
                               })()}
                             </div>
-                            <div className="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors group-hover:bg-blue-50"
-                              style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy)" }}>
+                            <div className="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-colors group-hover:bg-blue-50 dark:group-hover:bg-white/10"
+                              style={{ background: "rgba(0,31,63,0.06)", color: "var(--dash-navy-text)" }}>
                               <UploadCloud size={13} aria-hidden="true" />{t("dashboardElev.submitNow")}
                             </div>
                           </motion.button>

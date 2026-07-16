@@ -385,7 +385,7 @@ export default function AssignmentDetail({
             {hasReport && (
               <button type="button" onClick={() => void runBulkAnalysis()} disabled={isAnalysing || isBulkAnalysing || assnSubs.length === 0}
                 className="flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
-                style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(59,130,246,0.06)" }}
+                style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy-text)", background: "rgba(59,130,246,0.06)" }}
                 title={t("dashboardProfesor.rerunTitle")}>
                 {isBulkAnalysing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
                 {isBulkAnalysing
@@ -441,9 +441,17 @@ export default function AssignmentDetail({
                         <td className="px-4 py-3 text-xs" style={{ color: "var(--dash-muted)" }}>{assignment.class_code}</td>
                         <td className="px-4 py-3 text-xs truncate" style={{ color: "var(--dash-muted)" }}>{new Date(s.submittedAt).toLocaleDateString(dateLocale)}</td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <CheckCircle2 size={11} aria-hidden="true" />{t("dashboardProfesor.statusSent")}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
+                              <CheckCircle2 size={11} aria-hidden="true" />{t("dashboardProfesor.statusSent")}
+                            </span>
+                            {new Date(s.submittedAt).getTime() > new Date(assignment.deadline).getTime() && (
+                              <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-50 text-red-700 border-red-200"
+                                title={t("dashboardProfesor.lateTitle", { time: new Date(s.submittedAt).toLocaleString(dateLocale) })}>
+                                <Clock size={11} aria-hidden="true" />{t("dashboardProfesor.statusLate")}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {hasReport && showReport && rScore && (
                           <>
@@ -483,7 +491,7 @@ export default function AssignmentDetail({
                               <button
                                 onClick={() => onRequestForensic(s.id)}
                                 className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all hover:shadow-sm"
-                                style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)", background: "rgba(0,31,63,0.06)" }}
+                                style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy-text)", background: "rgba(0,31,63,0.06)" }}
                                 aria-label={t("dashboardProfesor.detailsAria", { name: s.studentName })}>
                                 <Search size={11} aria-hidden="true" />{t("dashboardProfesor.detailsBtn")}
                               </button>
