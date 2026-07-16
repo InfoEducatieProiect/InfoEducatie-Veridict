@@ -22,6 +22,7 @@ import {
   savePeerMatches,
   updateSubmissionAnalysis,
   getStudentBaselines,
+  upsertAveragedBaseline,
   type StudentBaseline,
   type PeerMatchInsert,
 } from "@/lib/supabase/queries"
@@ -37,6 +38,20 @@ function baselineFromRow(row: StudentBaseline | undefined): HistoricBaseline | n
     adjs: row.adjs,
     punct: row.punct,
   }
+}
+
+async function fetchAssignmentType(
+  supabase: SupabaseClient,
+  assignmentId: string,
+): Promise<"tema" | "test"> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("type")
+    .eq("id", assignmentId)
+    .maybeSingle()
+  // Missing column / row → treat as homework.
+  if (error || !data) return "tema"
+  return (data as { type?: string }).type === "test" ? "test" : "tema"
 }
 
 function computedToDbStilometric(
@@ -59,6 +74,11 @@ export async function persistAnalysisReport(
     supabase,
     submissions.map((s) => s.studentId),
   )
+
+  // Is this assignment a TEST? Tests establish/update the stylometric baseline
+  // instead of only being measured against it. Default to "tema" (homework) when
+  // the `type` column is absent (un-migrated DB).
+  const assignmentType = await fetchAssignmentType(supabase, assignmentId)
   const built = await buildAnalysisReport(
     assignmentId,
     submissions,
@@ -76,6 +96,28 @@ export async function persistAnalysisReport(
       baseline: baselineFromRow(baselinesByStudentId[sub.studentId]),
     })),
   )
+
+  // TEST assignments: fold each student's fresh spaCy metrics into their baseline
+  // via a true running average. Homework leaves the baseline untouched.
+  if (assignmentType === "test") {
+    for (const sub of submissions) {
+      const spa = styloBatch[sub.id]
+      if (!spa) continue // no real metrics (Python unavailable) → don't corrupt baseline
+      try {
+        await upsertAveragedBaseline(
+          sub.studentId,
+          spa.metrics,
+          baselinesByStudentId[sub.studentId] ?? null,
+          supabase,
+        )
+      } catch (e) {
+        console.warn(
+          `[baseline] failed to update baseline for student ${sub.studentId}:`,
+          e instanceof Error ? e.message : e,
+        )
+      }
+    }
+  }
 
   const run = await getOrCreateAnalysisRun(assignmentId, supabase)
 

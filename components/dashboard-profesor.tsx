@@ -203,18 +203,23 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     )
   }
 
-  const handleSave = async (data: { title: string; requirement: string; details: string; deadline: string; className: SchoolClass }) => {
+  const handleSave = async (data: { title: string; requirement: string; details: string; deadline: string; className: SchoolClass; type: "tema" | "test" }) => {
     const supabase = createClient()
     const classInfo = classes.find((c) => c.code === data.className)
     if (!classInfo) return
-    const { error } = await supabase.from("assignments").insert({
+    const baseRow = {
       professor_id: userId,
       title: data.title,
       requirement: data.requirement,
       details: data.details,
       deadline: new Date(data.deadline + "T23:59:59").toISOString(),
       class_id: classInfo.id,
-    })
+    }
+    let { error } = await supabase.from("assignments").insert({ ...baseRow, type: data.type })
+    // Backward-compat: retry without `type` if the column hasn't been migrated yet.
+    if (error && (error.code === "42703" || error.code === "PGRST204")) {
+      ;({ error } = await supabase.from("assignments").insert(baseRow))
+    }
     if (!error) mutateAssignments()
   }
 

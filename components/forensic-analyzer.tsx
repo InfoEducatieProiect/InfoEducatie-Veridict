@@ -188,6 +188,7 @@ export default function ForensicAnalyzer({
               studentName={studentName}
               assignmentId={assignmentId}
               submissionId={submissionId}
+              text={submissionTexts[studentName] ?? ""}
               initialReport={cachedScoreToUi(score)}
               onReport={onPlagiarismReport}
             />

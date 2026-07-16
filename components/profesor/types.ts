@@ -12,6 +12,7 @@ export interface Assignment {
   deadline: string
   class_id: string
   created_at: string
+  type?: "tema" | "test"
   class_code?: string
   additional_url?: string
   additional_filename?: string

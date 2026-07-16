@@ -60,13 +60,25 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: assignmentRow, error: assnErr } = await supabase
-      .from("assignments")
-      .select("id, professor_id")
-      .eq("id", assignmentId)
-      .maybeSingle()
+    let assignmentRow: { id: string; professor_id: string; type?: string } | null = null
+    {
+      let res = await supabase
+        .from("assignments")
+        .select("id, professor_id, type")
+        .eq("id", assignmentId)
+        .maybeSingle()
+      // Backward-compat: retry without `type` if the column hasn't been migrated yet.
+      if (res.error && (res.error.code === "42703" || res.error.code === "PGRST204")) {
+        res = await supabase
+          .from("assignments")
+          .select("id, professor_id")
+          .eq("id", assignmentId)
+          .maybeSingle()
+      }
+      if (res.error) throw res.error
+      assignmentRow = res.data
+    }
 
-    if (assnErr) throw assnErr
     if (!assignmentRow) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 })
     }
@@ -124,12 +136,15 @@ export async function POST(request: Request) {
       )
     }
 
+    const assignmentType = assignmentRow.type === "test" ? "test" : "tema"
+
     const result = await runStylometryAnalysis(
       analysisScoreId,
       studentId,
       submissionId,
       text,
       supabase,
+      assignmentType,
     )
 
     return NextResponse.json({

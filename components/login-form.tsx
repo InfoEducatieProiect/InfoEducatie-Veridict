@@ -19,6 +19,7 @@ export default function LoginForm({ role, onBack }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { t } = useLanguage()
+  const roleLabel = t(role === "Elev" ? "loginForm.roleElev" : "loginForm.roleProfesor")
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,10 +80,10 @@ export default function LoginForm({ role, onBack }: LoginFormProps) {
       <div className="rounded-2xl border border-border bg-card p-8 shadow-[0_0_48px_rgba(0,0,0,0.5)] backdrop-blur-sm">
         <div className="mb-8 flex flex-col gap-1">
           <span className="text-xs font-semibold uppercase tracking-widest text-accent">
-            {t("loginForm.portalLabel", { role })}
+            {t("loginForm.portalLabel", { role: roleLabel })}
           </span>
           <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            {t("loginForm.heading", { role })}
+            {t("loginForm.heading", { role: roleLabel })}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {t("loginForm.subtitle")}

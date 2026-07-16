@@ -4,7 +4,7 @@ import { spawn } from "child_process"
 import path from "path"
 import { createClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { StudentBaseline } from "@/lib/supabase/queries"
+import { upsertAveragedBaseline, type StudentBaseline } from "@/lib/supabase/queries"
 import {
   parseStylometryMetricsFromDb,
   stylometryMetricsToDbColumns,
@@ -347,6 +347,7 @@ export async function runStylometryAnalysis(
   submissionId: string,
   text: string,
   supabaseClient?: SupabaseClient,
+  assignmentType: "tema" | "test" = "tema",
 ): Promise<StylometryAnalysisResult> {
   const supabase = supabaseClient ?? (await createClient())
 
@@ -355,6 +356,8 @@ export async function runStylometryAnalysis(
 
   const referenceBaseline: StylometryMetrics =
     historicBaseline ?? { ...pythonOut.metrics }
+  // Deviation is always measured against the PREVIOUS baseline (or 0 when none).
+  // For a TEST this is informational; the test then updates the baseline below.
   const deviation = pythonOut.deviation
 
   // Aici am adăugat submissionId la finalul apelului ca să funcționeze Planul B
@@ -365,6 +368,28 @@ export async function runStylometryAnalysis(
     supabase,
     submissionId,
   )
+
+  // TEST: fold these metrics into the student's baseline (true running average).
+  if (assignmentType === "test") {
+    const { data: existingRow } = await supabase
+      .from("student_baselines")
+      .select("*")
+      .eq("student_id", studentId)
+      .maybeSingle()
+    try {
+      await upsertAveragedBaseline(
+        studentId,
+        pythonOut.metrics,
+        existingRow as StudentBaseline | null,
+        supabase,
+      )
+    } catch (e) {
+      console.warn(
+        `[baseline] failed to update baseline for student ${studentId}:`,
+        e instanceof Error ? e.message : e,
+      )
+    }
+  }
 
   return {
     metrics: pythonOut.metrics,

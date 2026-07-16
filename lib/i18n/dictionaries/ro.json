@@ -32,7 +32,9 @@
     "backBtn": "Înapoi la selectarea rolului",
     "errInvalidCreds": "Email sau parolă incorectă",
     "errProfileNotFound": "Profilul utilizatorului nu a fost găsit",
-    "errWrongRole": "Acest cont nu este înregistrat ca {role}"
+    "errWrongRole": "Acest cont nu este înregistrat ca {role}",
+    "roleElev": "Elev",
+    "roleProfesor": "Profesor"
   },
   "dashboardElev": {
     "portalBadge": "Portal Elev",
@@ -79,12 +81,15 @@
     "portalBadge": "Portal Profesor",
     "myAssignments": "Temele Mele",
     "myAssignmentsSubtitle": "Gestionați temele clasei și analizați predările.",
-    "newAssignment": "Creează Temă Nouă",
+    "newAssignment": "Creează",
     "filterClass": "Filtru clasă:",
-    "noAssignmentsAll": "Nu există teme create. Apăsați \"Creează Temă Nouă\" pentru a începe.",
+    "noAssignmentsAll": "Nu există teme create. Apăsați \"Creează\" pentru a începe.",
     "noAssignmentsClass": "Nu există teme pentru clasa {class}.",
     "modalTitle": "Creează Temă Nouă",
     "fieldClass": "Clasă Țintă",
+    "fieldType": "Tip Temă",
+    "typeOptionTema": "Temă",
+    "typeOptionTest": "Test",
     "fieldTitle": "Titlu",
     "fieldDesc": "Descriere",
     "fieldDeadline": "Termen Limită",
@@ -283,7 +288,8 @@
     "axisPunct": "Utilizare Punctuație",
     "missingIds": "Lipsesc textul sau identificatorii analizei.",
     "analysisError": "Eroare la analiță",
-    "wordsAbbr": " cuv."
+    "wordsAbbr": " cuv.",
+    "testBaselineNote": "Acest test a actualizat amprenta de referință a elevului. Deviația afișată este calculată față de referința anterioară."
   },
   "months": {
     "0": "Ianuarie", "1": "Februarie", "2": "Martie", "3": "Aprilie",

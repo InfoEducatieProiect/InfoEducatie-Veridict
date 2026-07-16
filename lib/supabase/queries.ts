@@ -55,6 +55,8 @@ export interface Assignment {
   deadline: string
   class_id: string
   created_at: string
+  /** "tema" (homework) or "test"; defaults to "tema" when the column is absent. */
+  type?: "tema" | "test"
   // Joined fields
   class_code?: string
   professor_name?: string
@@ -90,6 +92,8 @@ export interface StudentBaseline {
   verbs: number | null
   adjs: number | null
   punct: number | null
+  /** Number of tests averaged into this baseline; drives the running-average formula. */
+  sample_count?: number | null
   updated_at: string
 }
 
@@ -243,15 +247,27 @@ export async function createAssignment(data: {
   details?: string
   deadline: string
   class_id: string
+  type?: "tema" | "test"
 }): Promise<Assignment> {
   const supabase = createClient()
-  const { data: assignment, error } = await supabase
+  let res = await supabase
     .from("assignments")
     .insert(data)
     .select("*, classes(code)")
     .single()
-  
-  if (error) throw error
+
+  // Backward-compat: retry without `type` if the column hasn't been migrated yet.
+  if (res.error && isMissingColumnError(res.error)) {
+    const { type: _type, ...rest } = data
+    res = await supabase
+      .from("assignments")
+      .insert(rest)
+      .select("*, classes(code)")
+      .single()
+  }
+
+  if (res.error) throw res.error
+  const assignment = res.data
   return {
     ...assignment,
     class_code: (assignment as { classes?: { code: string } }).classes?.code
@@ -371,6 +387,61 @@ export async function getStudentBaselines(
     baselines[b.student_id] = b
   }
   return baselines
+}
+
+const BASELINE_METRIC_KEYS = ["ttr", "asl", "verbs", "adjs", "punct"] as const
+type BaselineMetrics = Record<(typeof BASELINE_METRIC_KEYS)[number], number>
+
+function round2Metric(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * Upsert a student's stylometric baseline after a TEST, using a true running
+ * average: `new = (old·n + current) / (n + 1)`, where `n = sample_count`.
+ * The first test (no prior row / count 0) seeds the baseline directly.
+ * If the `sample_count` column is absent (un-migrated DB), falls back to the
+ * simpler `(old + current) / 2` blend and writes without the count.
+ */
+export async function upsertAveragedBaseline(
+  studentId: string,
+  current: BaselineMetrics,
+  existing: StudentBaseline | null | undefined,
+  supabaseClient?: SupabaseClient,
+): Promise<void> {
+  const supabase = sb(supabaseClient)
+  const hasExisting =
+    !!existing &&
+    BASELINE_METRIC_KEYS.every((k) => existing[k] != null && Number.isFinite(Number(existing[k])))
+  const n = Math.max(0, Number(existing?.sample_count ?? 0))
+
+  const next = {} as BaselineMetrics
+  for (const k of BASELINE_METRIC_KEYS) {
+    if (!hasExisting || n <= 0) {
+      next[k] = round2Metric(current[k])
+    } else {
+      next[k] = round2Metric((Number(existing![k]) * n + current[k]) / (n + 1))
+    }
+  }
+
+  const now = new Date().toISOString()
+  const full = { student_id: studentId, ...next, sample_count: n + 1, updated_at: now }
+  let { error } = await supabase
+    .from("student_baselines")
+    .upsert(full, { onConflict: "student_id" })
+
+  // Backward-compat: DB without `sample_count` → blend (old+new)/2 and write without count.
+  if (error && isMissingColumnError(error)) {
+    const blended = {} as BaselineMetrics
+    for (const k of BASELINE_METRIC_KEYS) {
+      blended[k] = hasExisting ? round2Metric((Number(existing![k]) + current[k]) / 2) : round2Metric(current[k])
+    }
+    ;({ error } = await supabase
+      .from("student_baselines")
+      .upsert({ student_id: studentId, ...blended, updated_at: now }, { onConflict: "student_id" }))
+  }
+
+  if (error) throw error
 }
 
 // Get or create an analysis run for an assignment (one row per assignment, upserted)

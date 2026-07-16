@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Globe, AlertTriangle, ExternalLink, ShieldCheck } from "lucide-react"
+import { Globe, AlertTriangle, ExternalLink, ShieldCheck, Eye } from "lucide-react"
 import {
   type RaportPlagiatWeb,
   hitScorPct,
@@ -11,11 +11,13 @@ import {
   apiReportToUi,
 } from "@/lib/plagiarism-formatters"
 import { useLanguage } from "@/lib/i18n/language-provider"
+import TextPreviewer from "../profesor/TextPreviewer"
 
 interface WebScannerPanelProps {
   studentName: string
   assignmentId: string
   submissionId: string
+  text: string
   initialReport: RaportPlagiatWeb | null
   onReport?: (report: RaportPlagiatWeb) => void
 }
@@ -30,6 +32,7 @@ export default function WebScannerPanel({
   studentName,
   assignmentId,
   submissionId,
+  text,
   initialReport,
   onReport,
 }: WebScannerPanelProps) {
@@ -37,6 +40,7 @@ export default function WebScannerPanel({
   const [rezultatPlagiatWeb, setRezultatPlagiatWeb] = useState<RaportPlagiatWeb | null>(initialReport)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reading, setReading] = useState(false)
 
   const runScan = useCallback(
     async (force = false) => {
@@ -150,16 +154,38 @@ export default function WebScannerPanel({
         <p className="text-xs leading-relaxed max-w-xl" style={{ color: "var(--dash-muted)" }}>
           {translateVerdict(rezultatPlagiatWeb.verdict, scorMaximPct, t)}
         </p>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => void runScan(true)}
-          className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50"
-          style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)" }}
-        >
-          {loading ? t("forensic.webScanning") : t("forensic.webRescan")}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setReading(true)}
+            disabled={!text.trim()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50"
+            style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)" }}
+            aria-label={t("dashboardProfesor.readAria", { name: studentName })}
+          >
+            <Eye size={13} aria-hidden="true" />
+            {t("dashboardProfesor.readBtn")}
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void runScan(true)}
+            className="rounded-lg border px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50"
+            style={{ borderColor: "var(--dash-border)", color: "var(--dash-navy)" }}
+          >
+            {loading ? t("forensic.webScanning") : t("forensic.webRescan")}
+          </button>
+        </div>
       </div>
+
+      {reading && (
+        <TextPreviewer
+          studentName={studentName}
+          fileName=""
+          text={text}
+          onClose={() => setReading(false)}
+        />
+      )}
 
       {scanIncomplete && (
         <div

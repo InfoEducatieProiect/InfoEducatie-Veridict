@@ -32,7 +32,9 @@
     "backBtn": "Back to role selection",
     "errInvalidCreds": "Incorrect email or password",
     "errProfileNotFound": "User profile not found",
-    "errWrongRole": "This account is not registered as {role}"
+    "errWrongRole": "This account is not registered as {role}",
+    "roleElev": "Student",
+    "roleProfesor": "Professor"
   },
   "dashboardElev": {
     "portalBadge": "Student Portal",
@@ -79,12 +81,15 @@
     "portalBadge": "Teacher Portal",
     "myAssignments": "My Assignments",
     "myAssignmentsSubtitle": "Manage class assignments and analyze submissions.",
-    "newAssignment": "Create New Assignment",
+    "newAssignment": "Create",
     "filterClass": "Filter by class:",
-    "noAssignmentsAll": "No assignments created. Click \"Create New Assignment\" to get started.",
+    "noAssignmentsAll": "No assignments created. Click \"Create\" to get started.",
     "noAssignmentsClass": "No assignments for class {class}.",
     "modalTitle": "Create New Assignment",
     "fieldClass": "Target Class",
+    "fieldType": "Assignment Type",
+    "typeOptionTema": "Homework",
+    "typeOptionTest": "Test",
     "fieldTitle": "Title",
     "fieldDesc": "Description",
     "fieldDeadline": "Deadline",
@@ -283,7 +288,8 @@
     "axisPunct": "Punct. Usage",
     "missingIds": "Missing text or analysis identifiers.",
     "analysisError": "Analysis error",
-    "wordsAbbr": " wds."
+    "wordsAbbr": " wds.",
+    "testBaselineNote": "This test updated the student's reference fingerprint. The deviation shown is computed against the previous reference."
   },
   "months": {
     "0": "January", "1": "February", "2": "March", "3": "April",

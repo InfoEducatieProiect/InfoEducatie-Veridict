@@ -8,7 +8,7 @@ import { ALL_CLASSES, type SchoolClass } from "./types"
 
 interface CreateAssignmentModalProps {
   onClose: () => void
-  onSave: (data: { title: string; requirement: string; details: string; deadline: string; className: SchoolClass }) => void
+  onSave: (data: { title: string; requirement: string; details: string; deadline: string; className: SchoolClass; type: "tema" | "test" }) => void
 }
 
 export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignmentModalProps) {
@@ -18,6 +18,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
   const [details, setDetails] = useState("")
   const [deadline, setDeadline] = useState("")
   const [className, setClassName] = useState<SchoolClass>("12B")
+  const [assignmentType, setAssignmentType] = useState<"tema" | "test">("tema")
   const [showCalendar, setShowCalendar] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedHour, setSelectedHour] = useState(23)
@@ -27,7 +28,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
     return { year: now.getFullYear(), month: now.getMonth() }
   })
   const calendarBtnRef = useRef<HTMLButtonElement>(null)
-  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0, width: 0 })
+  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0, width: 0, openUp: false })
 
   const DAYS_RO   = [0,1,2,3,4,5,6].map(i => t(`daysShort.${i}`))
   const MONTHS_RO = [0,1,2,3,4,5,6,7,8,9,10,11].map(i => t(`months.${i}`))
@@ -37,10 +38,16 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
   const getFirstDayOfMonth = (y: number, m: number) => { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1 }
 
   const updateCalendarPos = useCallback(() => {
-    if (calendarBtnRef.current) {
-      const rect = calendarBtnRef.current.getBoundingClientRect()
-      setCalendarPos({ top: rect.bottom + 8, left: rect.left, width: rect.width })
-    }
+    if (!calendarBtnRef.current) return
+    const PANEL_H = 380, PANEL_W = 380, GAP = 8
+    const rect = calendarBtnRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    // Flip upward when there isn't room below and there is more room above.
+    const openUp = spaceBelow < PANEL_H && rect.top > spaceBelow
+    const top = openUp ? Math.max(GAP, rect.top - PANEL_H - GAP) : rect.bottom + GAP
+    // Clamp horizontally so the wide panel stays on-screen.
+    const left = Math.max(GAP, Math.min(rect.left, window.innerWidth - PANEL_W - GAP))
+    setCalendarPos({ top, left, width: rect.width, openUp })
   }, [])
 
   useLayoutEffect(() => { if (showCalendar) updateCalendarPos() }, [showCalendar, updateCalendarPos])
@@ -79,7 +86,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !requirement.trim() || !deadline) return
-    onSave({ title: title.trim(), requirement: requirement.trim(), details: details.trim(), deadline, className })
+    onSave({ title: title.trim(), requirement: requirement.trim(), details: details.trim(), deadline, className, type: assignmentType })
     onClose()
   }
 
@@ -111,6 +118,30 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.fieldType")} <span className="text-red-500">*</span></label>
+            <div className="grid grid-cols-2 gap-2">
+              {([["tema", "typeOptionTema"], ["test", "typeOptionTest"]] as const).map(([val, key]) => {
+                const active = assignmentType === val
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setAssignmentType(val)}
+                    aria-pressed={active}
+                    className="rounded-lg border py-2.5 text-sm font-semibold transition-colors"
+                    style={{
+                      borderColor: active ? "var(--dash-navy)" : "var(--dash-border)",
+                      background: active ? "var(--dash-navy)" : "var(--dash-bg)",
+                      color: active ? "#fff" : "var(--dash-fg)",
+                    }}
+                  >
+                    {t(`dashboardProfesor.${key}`)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.fieldTitle")} <span className="text-red-500">*</span></label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("dashboardProfesor.placeholderTitle")} required
               className="rounded-lg border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors"
@@ -137,7 +168,7 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
               {showCalendar && (
                 <>
                   <div className="fixed inset-0 z-[200]" onClick={() => setShowCalendar(false)} aria-hidden="true" />
-                  <motion.div initial={{ opacity: 0, y: -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.97 }} transition={{ duration: 0.2 }}
+                  <motion.div initial={{ opacity: 0, y: calendarPos.openUp ? 8 : -8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: calendarPos.openUp ? 8 : -8, scale: 0.97 }} transition={{ duration: 0.2 }}
                     className="fixed z-[201] rounded-xl border shadow-2xl overflow-hidden"
                     style={{ top: calendarPos.top, left: calendarPos.left, minWidth: Math.max(calendarPos.width, 380), background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
                     <div className="flex">
