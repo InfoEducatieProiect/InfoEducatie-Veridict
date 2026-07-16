@@ -22,7 +22,8 @@ import {
   savePeerMatches,
   updateSubmissionAnalysis,
   getStudentBaselines,
-  upsertAveragedBaseline,
+  getTestAssignmentRunIds,
+  recomputeStudentBaseline,
   type StudentBaseline,
   type PeerMatchInsert,
 } from "@/lib/supabase/queries"
@@ -97,28 +98,6 @@ export async function persistAnalysisReport(
     })),
   )
 
-  // TEST assignments: fold each student's fresh spaCy metrics into their baseline
-  // via a true running average. Homework leaves the baseline untouched.
-  if (assignmentType === "test") {
-    for (const sub of submissions) {
-      const spa = styloBatch[sub.id]
-      if (!spa) continue // no real metrics (Python unavailable) → don't corrupt baseline
-      try {
-        await upsertAveragedBaseline(
-          sub.studentId,
-          spa.metrics,
-          baselinesByStudentId[sub.studentId] ?? null,
-          supabase,
-        )
-      } catch (e) {
-        console.warn(
-          `[baseline] failed to update baseline for student ${sub.studentId}:`,
-          e instanceof Error ? e.message : e,
-        )
-      }
-    }
-  }
-
   const run = await getOrCreateAnalysisRun(assignmentId, supabase)
 
   const scoreRows = submissions.map((sub) => {
@@ -154,6 +133,25 @@ export async function persistAnalysisReport(
   })
 
   const insertedScores = await saveAnalysisScores(scoreRows, supabase)
+
+  // TEST assignments: recompute each student's baseline as the mean of their
+  // analysis_scores across every TEST assignment (runs after the fresh row above
+  // is persisted, so it's included). Homework leaves the baseline untouched.
+  if (assignmentType === "test") {
+    const testRunIds = await getTestAssignmentRunIds(supabase)
+    const studentIds = [...new Set(submissions.map((s) => s.studentId))]
+    for (const studentId of studentIds) {
+      try {
+        await recomputeStudentBaseline(studentId, testRunIds, supabase)
+      } catch (e) {
+        console.error(
+          `[baseline] TEST baseline recompute FAILED (assignment ${assignmentId}, student ${studentId}) — ` +
+            `baseline will NOT update. Check that migration 20260716120000 is applied to the live DB:`,
+          e instanceof Error ? e.message : e,
+        )
+      }
+    }
+  }
 
   // Reuse the similarity pass already computed in buildAnalysisReport (no recompute).
   const cazuri: CazSuspect[] = built.cazuri

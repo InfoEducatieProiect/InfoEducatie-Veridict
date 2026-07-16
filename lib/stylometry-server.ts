@@ -4,7 +4,7 @@ import { spawn } from "child_process"
 import path from "path"
 import { createClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { upsertAveragedBaseline, type StudentBaseline } from "@/lib/supabase/queries"
+import { getTestAssignmentRunIds, recomputeStudentBaseline, type StudentBaseline } from "@/lib/supabase/queries"
 import {
   parseStylometryMetricsFromDb,
   stylometryMetricsToDbColumns,
@@ -369,20 +369,12 @@ export async function runStylometryAnalysis(
     submissionId,
   )
 
-  // TEST: fold these metrics into the student's baseline (true running average).
+  // TEST: recompute the student's baseline as the mean of their analysis_scores
+  // across every TEST assignment (this submission's row was just persisted above).
   if (assignmentType === "test") {
-    const { data: existingRow } = await supabase
-      .from("student_baselines")
-      .select("*")
-      .eq("student_id", studentId)
-      .maybeSingle()
     try {
-      await upsertAveragedBaseline(
-        studentId,
-        pythonOut.metrics,
-        existingRow as StudentBaseline | null,
-        supabase,
-      )
+      const testRunIds = await getTestAssignmentRunIds(supabase)
+      await recomputeStudentBaseline(studentId, testRunIds, supabase)
     } catch (e) {
       console.warn(
         `[baseline] failed to update baseline for student ${studentId}:`,

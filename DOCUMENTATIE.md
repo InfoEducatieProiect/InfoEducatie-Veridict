@@ -1,10 +1,10 @@
-﻿# Documentația proiectului Veridict
+# Documentația proiectului Veridict
 
 > **Veridict** este o platformă pentru școli care ajută profesorii să verifice integritatea academică a lucrărilor. Profesorii creează teme, elevii încarcă lucrări (fișiere `.txt` sau `.docx`), iar aplicația analizează automat fiecare lucrare pentru a găsi semne de copiat: plagiat între elevi, text scris de inteligența artificială, schimbări suspecte de stil și texte copiate de pe internet.
 >
 > Sloganul aplicației: *„De la suspiciune, la certitudine matematică.”*
 
-Acest document explică, pe înțelesul tuturor, **ce face** aplicația, **ce tehnologii folosește** și **cum funcționează** pe dinăuntru — fără a intra în detalii de programare.
+Acest document explică **ce face** aplicația, **ce algoritmi** stau în spatele fiecărei funcții și **ce tehnologii** folosește. Este scris pe înțelesul tuturor, dar intră și în detaliile metodelor, ca cititorul să înțeleagă *cum* ajunge aplicația la fiecare rezultat.
 
 ---
 
@@ -13,15 +13,16 @@ Acest document explică, pe înțelesul tuturor, **ce face** aplicația, **ce te
 1. [Ce este Veridict și ce problemă rezolvă](#1-ce-este-veridict-și-ce-problemă-rezolvă)
 2. [Cine folosește aplicația (cele trei tipuri de utilizatori)](#2-cine-folosește-aplicația-cele-trei-tipuri-de-utilizatori)
 3. [Ce poate face aplicația](#3-ce-poate-face-aplicația)
-4. [Cele patru tipuri de analiză (explicate simplu)](#4-cele-patru-tipuri-de-analiză-explicate-simplu)
-5. [Teme vs. Teste — cum diferă analiza stilului](#5-teme-vs-teste--cum-diferă-analiza-stilului)
-6. [Confidențialitatea elevilor](#6-confidențialitatea-elevilor)
-7. [Ce tehnologii folosește aplicația](#7-ce-tehnologii-folosește-aplicația)
-8. [Ce informații sunt păstrate (baza de date)](#8-ce-informații-sunt-păstrate-baza-de-date)
-9. [Cum „navighezi” prin aplicație (adresa din browser)](#9-cum-navighezi-prin-aplicație-adresa-din-browser)
-10. [Limba aplicației (română / engleză)](#10-limba-aplicației-română--engleză)
-11. [Cum pornești aplicația](#11-cum-pornești-aplicația)
-12. [Lucruri importante de știut](#12-lucruri-importante-de-știut)
+4. [Cele patru analize și algoritmii din spate](#4-cele-patru-analize-și-algoritmii-din-spate)
+5. [Tabel-rezumat: algoritm + tehnologie pentru fiecare funcție](#5-tabel-rezumat-algoritm--tehnologie-pentru-fiecare-funcție)
+6. [Teme vs. Teste — cum diferă analiza stilului](#6-teme-vs-teste--cum-diferă-analiza-stilului)
+7. [Confidențialitatea elevilor](#7-confidențialitatea-elevilor)
+8. [Ce tehnologii folosește aplicația](#8-ce-tehnologii-folosește-aplicația)
+9. [Ce informații sunt păstrate (baza de date)](#9-ce-informații-sunt-păstrate-baza-de-date)
+10. [Cum „navighezi” prin aplicație (adresa din browser)](#10-cum-navighezi-prin-aplicație-adresa-din-browser)
+11. [Limba aplicației (română / engleză)](#11-limba-aplicației-română--engleză)
+12. [Cum pornești aplicația](#12-cum-pornești-aplicația)
+13. [Lucruri importante de știut](#13-lucruri-importante-de-știut)
 
 ---
 
@@ -47,13 +48,13 @@ Este persoana care **furnizează conturile** pentru elevi și profesori. În Ver
 - asociază fiecare cont cu rolul corect (elev sau profesor) și cu clasa potrivită,
 - gestionează aceste conturi în timp.
 
-Administratorul lucrează „în spatele scenei” (la nivelul sistemului care ține conturile și datele), fără un ecran separat în interfața obișnuită a aplicației. Practic, el se asigură că fiecare elev și profesor are un cont valid și corect configurat.
+Administratorul lucrează „în spatele scenei” (la nivelul sistemului care ține conturile și datele), fără un ecran separat în interfața obișnuită a aplicației.
 
 ### 👨‍🏫 Profesorul
 Creează teme, vede lucrările predate și pornește analiza. Are acces la toate rezultatele și rapoartele detaliate.
 
 ### 🎓 Elevul
-Vede temele pe care le are de predat, încarcă lucrarea și își vede istoricul predărilor. **Elevul nu vede niciun scor sau raport de analiză** (vezi [capitolul 6](#6-confidențialitatea-elevilor)).
+Vede temele pe care le are de predat, încarcă lucrarea și își vede istoricul predărilor. **Elevul nu vede niciun scor sau raport de analiză** (vezi [capitolul 7](#7-confidențialitatea-elevilor)).
 
 > La conectare, fiecare persoană intră pe portalul potrivit (Elev sau Profesor). Aplicația verifică rolul contului: un elev nu se poate conecta pe portalul de profesor și invers.
 
@@ -65,12 +66,7 @@ Vede temele pe care le are de predat, încarcă lucrarea și își vede istoricu
 - **Creează o temă** pentru o anumită clasă, cu titlu, cerință, detalii, termen-limită (deadline) și **tip**: *Temă* (temă de casă obișnuită) sau *Test*.
 - **Vede toate lucrările** predate pentru fiecare temă, într-un tabel.
 - **Pornește analiza** cu un singur buton. Aplicația procesează toate lucrările și afișează, pentru fiecare elev: scorul AI, similaritatea cu colegii și abaterea de stil.
-- **Intră în detaliu pe fiecare elev** (butonul „Detalii”), unde găsește un panou de analiză cu mai multe secțiuni:
-  - graficul de similaritate cu colegii,
-  - „radarul” stilometric (amprenta de scris),
-  - clasificarea AI,
-  - scanarea web globală (căutarea pe internet),
-  - graficul de integritate al întregii clase.
+- **Intră în detaliu pe fiecare elev** (butonul „Detalii”), unde găsește un panou de analiză cu mai multe secțiuni: graficul de similaritate cu colegii, „radarul” stilometric, clasificarea AI, scanarea web globală și graficul de integritate al întregii clase.
 - **Citește lucrarea** oricărui elev, direct în aplicație.
 
 ### Pentru elev
@@ -80,52 +76,119 @@ Vede temele pe care le are de predat, încarcă lucrarea și își vede istoricu
 
 ---
 
-## 4. Cele patru tipuri de analiză (explicate simplu)
+## 4. Cele patru analize și algoritmii din spate
 
-Aici stă „inteligența” aplicației. Pentru fiecare lucrare se fac patru verificări diferite.
+Aici stă „inteligența” aplicației. Pentru fiecare lucrare se fac patru verificări diferite. Mai jos, fiecare are trei părți: **ce face**, **cum funcționează algoritmul** și **ce tehnologie îl rulează**.
 
 ### a) Plagiat între elevi (similaritatea)
-Aplicația compară lucrările elevilor **între ele** și caută pasaje comune. Folosește două metode complementare:
-- **Potrivirea de expresii (Jaccard):** cât de multe grupuri de cuvinte apar identic în ambele lucrări. Dacă două lucrări au multe fraze la fel, e semn de copiat.
-- **Asemănarea de vocabular (Cosinus):** cât de asemănătoare sunt cele două texte ca „amprentă” de cuvinte folosite, chiar dacă frazele nu sunt identice.
 
-Când două lucrări depășesc un anumit prag de asemănare, aplicația le marchează ca **pereche suspectă** și evidențiază exact frazele comune, ca profesorul să le poată compara una lângă alta.
+**Ce face:** compară lucrările elevilor **între ele** și găsește perechile suspecte, evidențiind exact frazele comune.
+
+**Cum funcționează algoritmul:** aplicația folosește două metode clasice de comparare a textelor, apoi le combină.
+
+1. **Similaritatea Cosinus (pe vocabular).**
+   Fiecare lucrare este transformată într-un „profil de frecvențe”: se numără de câte ori apare fiecare cuvânt. Acest profil poate fi văzut ca un vector (o săgeată) într-un spațiu cu multe dimensiuni. Similaritatea Cosinus măsoară **unghiul** dintre vectorii a două lucrări:
+   - formula este *produsul scalar / (lungimea vectorului 1 × lungimea vectorului 2)*, cu rezultat între 0 și 1 (0 = complet diferite, 1 = identice ca distribuție de cuvinte);
+   - pentru viteză, se folosesc „profiluri rare” (se parcurg doar cuvintele care apar efectiv), nu tot vocabularul clasei;
+   - pragul de suspiciune implicit este **0,45**; perechile cu asemănare **≥ 50%** devin muchii în graficul de integritate al clasei.
+
+2. **Similaritatea Jaccard (pe expresii / „shingles”).**
+   Textul este tăiat în **grupuri de câte 4 cuvinte consecutive** (numite *shingles*). Jaccard compară seturile de astfel de grupuri ale celor două lucrări:
+   - formula este *câte grupuri au în comun / câte grupuri au în total* (intersecție / reuniune), exprimată în procente;
+   - această metodă prinde **copierea de fraze întregi**, chiar și când vocabularul general diferă.
+
+3. **Combinarea și evidențierea frazelor.** Similaritatea unei perechi este, în esență, **cea mai mare** dintre cele două semnale. Separat, un modul de detectare a frazelor („ideatic similare”) găsește pasajele comune, care sunt apoi colorate în ecranul de comparație una-lângă-alta.
+
+**Tehnologia:** cod TypeScript pur (motorul din `lib/analysis/`), fără dependențe externe — rulează foarte rapid pentru o clasă întreagă.
 
 ### b) Detectarea textului scris de inteligența artificială
-Aplicația estimează cât de probabil este ca textul să fi fost generat de un program AI (ChatGPT și altele). Se uită la mai multe semnale:
-- un **model de inteligență artificială** antrenat să recunoască texte generate automat,
-- **ritmul textului** — oamenii scriu neregulat (propoziții scurte și lungi amestecate), iar AI-ul tinde să scrie foarte uniform,
-- **expresii tipice** pe care AI-ul le folosește des.
 
-Rezultatul este un **scor AI** (un procent). Cu cât e mai mare, cu atât e mai probabil ca textul să fie scris de o mașină. Aplicația funcționează atât în română, cât și în engleză.
+**Ce face:** estimează, printr-un procent (scorul AI), cât de probabil este ca textul să fi fost generat de un program AI. Funcționează în română și engleză.
+
+**Cum funcționează algoritmul:** este un **ansamblu de trei semnale** care sunt combinate cu ponderi ce se adaptează la limbă.
+
+1. **Semnalul R — un model neural (clasificator RoBERTa).**
+   Un model de inteligență artificială pre-antrenat, **`yaya36095/xlm-roberta-text-detector`** (bazat pe **XLM-RoBERTa**, un model multilingv), care spune cât de „artificial” pare textul. Observație importantă: pentru textele în **română**, acest model tinde să dea scoruri foarte mari pentru aproape orice text, deci nu este de încredere singur — de aceea i se dă o pondere mică pe română.
+
+2. **Semnalul P — perplexitatea (doar pentru română).**
+   Se folosește un model de limbă românesc, **`dumitrescustefan/bert-base-romanian-cased-v1`** (un **BERT** pentru română, ~125 MB), pentru a măsura cât de „previzibil” este textul: modelul ascunde pe rând câte un cuvânt și încearcă să-l ghicească, calculând *surpriza medie* și *variația surprizei* la nivel de cuvânt. Textul generat de AI este de obicei foarte previzibil (surpriză mică, uniformă). Acest semnal există doar pe calea Python (varianta de rezervă în TypeScript nu îl are).
+
+3. **Semnalul S — structura textului (stilometrie de suprafață).** Un scor construit din mai mulți indicatori:
+   - **Burstiness** = *deviația standard a lungimii propozițiilor*. Oamenii scriu neregulat (propoziții scurte și lungi amestecate → burstiness mare); AI-ul scrie uniform (burstiness mic).
+   - **Amprente (fraze-clișeu)** = numărul de expresii tipic „AI” găsite în text, dintr-un dicționar bilingv (ex.: *„un rol crucial”*, *„în concluzie”*, *„one of the most”*). Se caută pe cuvinte întregi și fără diacritice, iar contribuția lor crește logaritmic (efect de saturație).
+   - **Diversitatea vocabularului (TTR)** și **diversitatea semnelor de punctuație** — AI-ul folosește adesea vocabular și punctuație mai uniforme.
+
+**Combinarea (fuziunea):** scorul final = *R × pondere_R + P × pondere_P + S × pondere_S*, unde ponderile se schimbă după limbă (pe română se sprijină pe P și S; pe engleză se poate baza mai mult pe R). Există și **„scuturi”** anti-eroare: dacă textul e clar uman (burstiness mare + puține clișee), scorul R este plafonat, ca să nu se acuze pe nedrept un text literar sau enciclopedic. Rezultatul final este limitat la intervalul **0–99,4%**.
+
+**Tehnologia:** script Python `scripts/ai_detector.py` cu bibliotecile **transformers / torch** (modelele neural). Dacă Python nu e disponibil, aplicația folosește o **variantă de rezervă în TypeScript** (`lib/hybrid-ai-detection.ts`) care păstrează semnalul structural, dar fără perplexitate (scoruri mai puțin precise).
 
 ### c) Stilometria — „amprenta de scris”
-Fiecare persoană are un stil propriu de a scrie. Stilometria măsoară acest stil prin cinci indicatori:
-- **bogăția vocabularului** (câte cuvinte diferite folosește),
-- **lungimea medie a propozițiilor**,
-- **cât de des folosește verbe**,
-- **cât de des folosește adjective**,
-- **cât de des folosește semne de punctuație**.
 
-Aplicația compară stilul lucrării curente cu **stilul obișnuit** al acelui elev (numit „referință” sau *baseline*). Dacă apare o abatere mare — de exemplu, un elev care scrie de obicei simplu predă brusc un text foarte elaborat — analiza o semnalează ca suspectă.
+**Ce face:** măsoară stilul de scriere al elevului și îl compară cu stilul lui obișnuit, ca să prindă schimbări suspecte.
+
+**Cum funcționează algoritmul:** din fiecare text se extrag **cinci indicatori**:
+- **TTR (bogăția vocabularului)** — câte cuvinte diferite raportat la total;
+- **ASL (lungimea medie a propozițiilor)** — câte cuvinte are, în medie, o propoziție;
+- **densitatea verbelor**, **densitatea adjectivelor** — cât de des apar;
+- **densitatea semnelor de punctuație** — semne la 100 de cuvinte.
+
+Cei cinci indicatori formează „amprenta” elevului. Compararea cu referința (stilul obișnuit) se face cu o **distanță Manhattan normalizată**:
+
+> deviația = ( 1/5 × Σ |valoare_curentă − valoare_referință| / max(valoare_curentă, valoare_referință) ) × 100
+
+Pe scurt: pentru fiecare dintre cei 5 indicatori se calculează cât de mult diferă (proporțional), se face media și se transformă în procent. Dacă deviația depășește un prag (în jur de **38–40%**), lucrarea este marcată cu „Abatere Stilistică”.
+
+**Tehnologia:** script Python `scripts/analiza_stilometrie.py` cu **spaCy** și modelul de limbă română **`ro_core_news_sm`**, care recunoaște corect părțile de vorbire (verbe, adjective). Varianta de rezervă în TypeScript aproximează verbele/adjectivele după terminații de cuvinte, când spaCy nu e disponibil.
 
 ### d) Plagiat de pe internet (scanarea web)
-Aplicația caută pe internet dacă textul a fost copiat de undeva. Pentru asta folosește **inteligența artificială Google (Gemini)** împreună cu **căutarea Google**: găsește pagini web care ar putea fi surse, le compară cu lucrarea și raportează un verdict, un procent de potrivire și lista de linkuri suspecte. Rezultatele sunt salvate, ca să nu fie nevoie să se refacă căutarea de fiecare dată (dar profesorul poate cere o rescanare).
+
+**Ce face:** caută pe internet dacă textul a fost copiat de undeva și raportează sursele.
+
+**Cum funcționează algoritmul:**
+1. **Găsirea surselor** — se folosește **Gemini Flash (Google)** împreună cu **Google Search grounding**: modelul caută pe web și întoarce linkuri către posibile surse. Aplicația alege o **frază distinctivă** din lucrare pentru o căutare mai țintită, apoi extrage URL-urile din răspuns (rezolvând și linkurile „ambalate” / de redirecționare).
+2. **Descărcarea paginilor** — sursele găsite sunt descărcate și curățate de cod (cu BeautifulSoup), rămânând doar textul.
+3. **Compararea** — între lucrare și fiecare sursă se calculează un **scor hibrid = maximul dintre**:
+   - **similaritatea Cosinus** (pe vocabular, ca la punctul a), și
+   - **containment pe n-grame** — se verifică ce fracțiune din grupurile de 2, 3 și 4 cuvinte ale lucrării apar în sursă. Această metodă prinde bine copierea pe porțiuni.
+
+Rezultatul include un verdict, scorul maxim de potrivire, sursa principală și lista de linkuri suspecte. Totul se salvează în baza de date, ca să nu se refacă scanarea de fiecare dată (profesorul poate totuși cere o rescanare).
+
+**Tehnologia:** script Python `scripts/detectie_plagiat_gemini.py` cu biblioteca **google-genai** (Gemini), **requests** și **BeautifulSoup** (descărcarea și curățarea paginilor). Necesită o cheie **GEMINI_API_KEY**.
+
+> **De ce Python pentru analize?** Partea web a aplicației (ce vede utilizatorul) trimite textul lucrării către aceste scripturi Python, care fac „calculele grele” și returnează un rezultat în format JSON. Astfel, modelele de inteligență artificială și analiza de limbaj rulează separat, iar interfața rămâne rapidă.
 
 ---
 
-## 5. Teme vs. Teste — cum diferă analiza stilului
+## 5. Tabel-rezumat: algoritm + tehnologie pentru fiecare funcție
+
+| Funcție | Algoritm / metodă | Tehnologia care o rulează |
+|---|---|---|
+| Plagiat între elevi | Similaritate **Cosinus** (vectori de frecvențe) + **Jaccard** pe *shingles* de 4 cuvinte; evidențierea frazelor comune | TypeScript (`lib/analysis/`) |
+| Detectare text AI | **Ansamblu de 3 semnale**: clasificator RoBERTa (`yaya36095/xlm-roberta-text-detector`) + perplexitate BERT-RO (`dumitrescustefan/bert-base-romanian-cased-v1`) + scor structural (burstiness, fraze-clișeu, TTR, punctuație), cu ponderi adaptive pe limbă | Python (`ai_detector.py`, transformers/torch); rezervă TypeScript |
+| Stilometrie | 5 indicatori de stil + **distanță Manhattan normalizată** față de referință | Python (`analiza_stilometrie.py`, spaCy `ro_core_news_sm`) |
+| Plagiat web | **Gemini 2.5 Flash + Google Search grounding** pentru surse, apoi **Cosinus** + **containment pe n-grame** (2/3/4) | Python (`detectie_plagiat_gemini.py`, google-genai) |
+| Referință de stil (test) | **Medie mobilă reală**: `nou = (vechi × n + curent) / (n + 1)` | TypeScript + baza de date |
+| Interfața web | Componente și ecrane, încărcare de date | Next.js + React, SWR, Tailwind |
+| Conturi și date | Autentificare, roluri, stocare | Supabase |
+
+---
+
+## 6. Teme vs. Teste — cum diferă analiza stilului
 
 Temele și testele se comportă la fel în aproape toate privințele. **Singura diferență este la stilometrie** (amprenta de scris):
 
 - **La o temă de casă:** stilul lucrării se **compară** cu referința (stilul obișnuit al elevului), iar aplicația arată cât de mult diferă. Referința rămâne neschimbată.
 - **La un test:** pornind de la ideea că un test se face în clasă, sub supraveghere, textul este considerat „autentic”. De aceea, stilul testului **devine noua referință** pentru acel elev — punctul de comparație pentru temele viitoare.
 
-Dacă un elev dă mai multe teste, referința se calculează ca o **medie a tuturor testelor** (fiecare test contează în mod egal). Astfel, un singur test „ciudat” nu strică referința, iar comparațiile ulterioare sunt corecte și evită acuzațiile nedrepte.
+Dacă un elev dă mai multe teste, referința se calculează ca o **medie a tuturor testelor** (fiecare test contează în mod egal), după formula:
+
+> referință_nouă = ( referință_veche × n + valorile_testului_curent ) / ( n + 1 )
+
+unde *n* este numărul de teste luate deja în calcul. Astfel, un singur test „ciudat” nu strică referința (spre deosebire de o medie care ar da toată greutatea ultimului test), iar comparațiile ulterioare rămân corecte și evită acuzațiile nedrepte.
 
 ---
 
-## 6. Confidențialitatea elevilor
+## 7. Confidențialitatea elevilor
 
 Aceasta este o **regulă strictă** a aplicației: ecranul elevului **nu afișează niciodată** scoruri AI, procente de plagiat, grafice sau alerte de analiză.
 
@@ -137,28 +200,29 @@ Rezultatele analizei rămân **exclusiv** pentru profesor. Această regulă este
 
 ---
 
-## 7. Ce tehnologii folosește aplicația
+## 8. Ce tehnologii folosește aplicația
 
 Pe scurt, ce „unelte” stau la baza aplicației și la ce folosește fiecare:
 
 | Tehnologie | La ce folosește (pe înțelesul tuturor) |
 |---|---|
-| **Next.js** (cu React) | „Scheletul” aplicației web — se ocupă de paginile, ecranele și logica din browser. |
+| **Next.js** (cu React) | „Scheletul” aplicației web — paginile, ecranele și logica din browser, plus rutele de server care pornesc analizele. |
 | **Supabase** | Ține **baza de date** (unde se salvează totul) și gestionează **conturile și autentificarea** (login/logout, roluri). Aici lucrează și administratorul cu conturile. |
 | **Tailwind CSS + shadcn/ui** | Aspectul vizual: culori, butoane, tabele, ferestre — partea care face aplicația să arate modern și îngrijit. |
 | **Framer Motion** | Animațiile fine (tranziții între ecrane, apariții line). |
-| **SWR** | Încarcă datele rapid din baza de date și le ține actualizate pe ecran. |
+| **SWR** | Încarcă datele din baza de date și le ține actualizate pe ecran, cu memorare inteligentă („cache”). |
 | **Recharts** | Desenează graficele (distribuția scorurilor, radarul de stil). |
 | **mammoth.js** | Transformă fișierele `.docx` în text simplu, direct în browser, când elevul încarcă o lucrare. |
-| **Python + spaCy** | Analiza limbajului pentru stilometrie (spaCy este un instrument specializat pe limbaj, cu suport pentru română). |
-| **Gemini (Google) + Căutarea Google** | Scanarea internetului pentru plagiat web. |
-| **Modele de inteligență artificială (transformers/torch)** | Recunoașterea textelor generate de AI. |
+| **Python + spaCy** (`ro_core_news_sm`) | Analiza de limbaj pentru stilometrie (recunoaște verbe, adjective, propoziții în română). |
+| **transformers / torch** | Rulează cele două modele de inteligență artificială pentru detectarea textului generat de AI:<br>• **`yaya36095/xlm-roberta-text-detector`** (XLM-RoBERTa) — clasificatorul „uman vs. AI”;<br>• **`dumitrescustefan/bert-base-romanian-cased-v1`** (BERT românesc) — pentru perplexitate (cât de previzibil e textul). |
+| **Gemini (Google) + google-genai** | Căutarea și analiza surselor de pe internet pentru plagiatul web. Modelul folosit: **`gemini-2.5-flash`** cu Google Search grounding. |
+| **requests + BeautifulSoup** | Descarcă paginile web găsite și extrag textul curat pentru comparație. |
 
-Aplicația combină deci **partea web** (ce vede utilizatorul) cu **partea de analiză** (scripturi Python care fac calculele grele „în spate”). Ecranul îi trimite textul lucrării, scriptul face analiza și returnează rezultatul, care apoi se salvează și se afișează.
+**Cum comunică cele două lumi:** interfața web (TypeScript) și analizele grele (Python) vorbesc printr-un protocol simplu — aplicația trimite scriptului textul lucrării „la intrare”, iar scriptul răspunde cu un rezultat în format JSON „la ieșire”. Analiza pentru toată clasa (detectare AI + similaritate + stilometrie) este pornită dintr-o singură cerere și transmite progresul în timp real, ca profesorul să vadă o bară care avansează.
 
 ---
 
-## 8. Ce informații sunt păstrate (baza de date)
+## 9. Ce informații sunt păstrate (baza de date)
 
 Baza de date este locul unde se salvează totul. Principalele categorii de informații:
 
@@ -175,7 +239,7 @@ Baza de date este locul unde se salvează totul. Principalele categorii de infor
 
 ---
 
-## 9. Cum „navighezi” prin aplicație (adresa din browser)
+## 10. Cum „navighezi” prin aplicație (adresa din browser)
 
 Aplicația ține minte **unde te afli** chiar în adresa din bara browserului. Asta aduce trei avantaje practice:
 
@@ -187,13 +251,13 @@ Practic, adresa se schimbă pe măsură ce intri mai adânc: de la lista de teme
 
 ---
 
-## 10. Limba aplicației (română / engleză)
+## 11. Limba aplicației (română / engleză)
 
 Aplicația este în întregime în **română**, dar are un **buton de schimbare a limbii** în **engleză**. Toate textele afișate sunt luate din două „dicționare” (unul român, unul englez), astfel încât întreaga interfață se traduce dintr-o singură apăsare. Preferința de limbă este ținută minte între vizite.
 
 ---
 
-## 11. Cum pornești aplicația
+## 12. Cum pornești aplicația
 
 Pentru cineva care vrea să ruleze aplicația pe calculatorul propriu, pașii de bază sunt:
 
@@ -217,16 +281,14 @@ Odată pornită, aplicația se deschide în browser, iar utilizatorii se conecte
 
 ---
 
-## 12. Lucruri importante de știut
+## 13. Lucruri importante de știut
 
 - **Conturile sunt oferite de administrator.** Nu există înregistrare liberă; fiecare elev și profesor primește un cont creat și configurat de administrator.
 - **Confidențialitatea elevilor este obligatorie.** Nicio informație de analiză (scoruri, procente, grafice) nu trebuie să ajungă vreodată pe ecranul elevului.
-- **Analiza „grea” se face cu Python.** Dacă partea Python nu este instalată corect (de exemplu, lipsește modelul de limbă română pentru spaCy sau cheia Gemini), analizele respective nu vor funcționa, chiar dacă restul aplicației merge.
+- **Analiza „grea” se face cu Python.** Dacă partea Python nu este instalată corect (de exemplu, lipsește modelul de limbă română pentru spaCy sau cheia Gemini), analizele respective nu vor funcționa, chiar dacă restul aplicației merge. În cazul detectării AI există o variantă de rezervă în TypeScript, dar mai puțin precisă (fără perplexitate).
 - **Testele modelează referința de stil.** Un test bine dat ajută aplicația să înțeleagă cum scrie de obicei elevul, ceea ce face mai precise verificările de la temele viitoare.
 - **Rezultatele sunt un ajutor, nu o sentință.** Mai ales la plagiatul web, aplicația recomandă verificarea manuală a linkurilor: sistemul semnalează corelații și surse posibile, dar decizia finală rămâne a profesorului.
 
 ---
 
 *Acest document descrie aplicația la momentul redactării. Când se schimbă modul de funcționare, este bine să fie actualizat și el.*
-
-

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Filter, FileText, ChevronRight, Users, Calendar, AlertTriangle } from "lucide-react"
+import { Plus, Filter, FileText, GraduationCap, ChevronRight, Users, Calendar, AlertTriangle } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/language-provider"
 import type { Assignment, ClassInfo } from "./types"
 
@@ -60,9 +60,24 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew }
               style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(59,130,246,0.1)" }}>
-                    <FileText size={16} style={{ color: "var(--dash-accent)" }} aria-hidden="true" />
-                  </div>
+                  {(() => {
+                    // Legacy rows without a `type` are treated as homework ("tema").
+                    const isTest = a.type === "test"
+                    const tint = isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)"
+                    const fg = isTest ? "#8b5cf6" : "var(--dash-accent)"
+                    const Icon = isTest ? GraduationCap : FileText
+                    const label = isTest ? t("dashboardProfesor.typeOptionTest") : t("dashboardProfesor.typeOptionTema")
+                    return (
+                      <>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: tint }}>
+                          <Icon size={16} style={{ color: fg }} aria-hidden="true" />
+                        </div>
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: tint, color: fg }}>
+                          {label}
+                        </span>
+                      </>
+                    )
+                  })()}
                   <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "rgba(59,130,246,0.1)", color: "var(--dash-accent)" }}>
                     {a.class_code}
                   </span>

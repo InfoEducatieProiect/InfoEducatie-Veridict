@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Brain, ArrowLeft, Calendar, CheckCircle2, Clock, Eye, Search,
   Paperclip, ExternalLink, ChevronLeft, ChevronRight, Loader2, RefreshCw,
+  FileText, GraduationCap,
 } from "lucide-react"
 import useSWR, { mutate } from "swr"
 import { createClient } from "@/lib/supabase/client"
@@ -290,6 +291,19 @@ export default function AssignmentDetail({
               <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "rgba(59,130,246,0.1)", color: "var(--dash-accent)" }}>
                 {t("dashboardProfesor.classLabel", { code: assignment.class_code ?? "" })}
               </span>
+              {(() => {
+                // Legacy rows without a `type` are treated as homework ("tema").
+                const isTest = assignment.type === "test"
+                const tint = isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)"
+                const fg = isTest ? "#8b5cf6" : "var(--dash-accent)"
+                const Icon = isTest ? GraduationCap : FileText
+                const label = isTest ? t("dashboardProfesor.typeOptionTest") : t("dashboardProfesor.typeOptionTema")
+                return (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: tint, color: fg }}>
+                    <Icon size={12} aria-hidden="true" />{label}
+                  </span>
+                )
+              })()}
             </div>
             <h2 className="text-lg font-bold" style={{ color: "var(--dash-fg)" }}>{assignment.title}</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--dash-muted)" }}>{assignment.requirement}</p>

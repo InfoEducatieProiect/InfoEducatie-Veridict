@@ -17,6 +17,21 @@ function isMissingColumnError(error: unknown): boolean {
   )
 }
 
+/**
+ * True when an `upsert(..., { onConflict })` fails because the target table has
+ * no matching unique constraint/index (Postgres `42P10`). Happens on an
+ * un-migrated DB where `student_baselines_student_id_key` doesn't exist yet.
+ */
+function isMissingUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const e = error as { code?: string; message?: string }
+  return (
+    e.code === "42P10" ||
+    (typeof e.message === "string" &&
+      e.message.includes("no unique or exclusion constraint matching the ON CONFLICT"))
+  )
+}
+
 /** Newest-first for in-memory rows when DB order cannot be relied on. */
 export function sortByCreatedAtDesc<T extends { created_at?: string | null }>(
   rows: T[],
@@ -397,51 +412,106 @@ function round2Metric(n: number): number {
 }
 
 /**
- * Upsert a student's stylometric baseline after a TEST, using a true running
- * average: `new = (old·n + current) / (n + 1)`, where `n = sample_count`.
- * The first test (no prior row / count 0) seeds the baseline directly.
- * If the `sample_count` column is absent (un-migrated DB), falls back to the
- * simpler `(old + current) / 2` blend and writes without the count.
+ * All `analysis_runs.id` values belonging to TEST-type assignments. Fetch this
+ * once per batch/analysis call and reuse across students — cheap, global (a
+ * school's assignment count is small), and avoids depending on PostgREST
+ * embedded-relationship syntax.
  */
-export async function upsertAveragedBaseline(
+export async function getTestAssignmentRunIds(supabaseClient?: SupabaseClient): Promise<string[]> {
+  const supabase = sb(supabaseClient)
+  const { data: testAssignments, error: aErr } = await supabase
+    .from("assignments")
+    .select("id")
+    .eq("type", "test")
+  if (aErr) {
+    if (!isMissingColumnError(aErr)) console.error("[baseline] failed to load test assignments:", aErr.message)
+    return []
+  }
+  if (!testAssignments?.length) return []
+
+  const { data: runs, error: rErr } = await supabase
+    .from("analysis_runs")
+    .select("id")
+    .in("assignment_id", testAssignments.map((a) => a.id))
+  if (rErr) {
+    console.error("[baseline] failed to load test analysis_runs:", rErr.message)
+    return []
+  }
+  return (runs || []).map((r) => r.id)
+}
+
+/**
+ * Recompute a student's stylometric baseline as the arithmetic mean of their
+ * `analysis_scores` across every TEST assignment they've been analyzed on.
+ * `analysis_scores` is upserted on `(analysis_run_id, submission_id)`, so
+ * re-analyzing the same test overwrites its single row rather than adding a
+ * new sample — making this recompute idempotent under reruns. `sample_count`
+ * reflects the number of distinct tests, not the number of analysis runs.
+ */
+export async function recomputeStudentBaseline(
   studentId: string,
-  current: BaselineMetrics,
-  existing: StudentBaseline | null | undefined,
+  testRunIds: string[],
   supabaseClient?: SupabaseClient,
 ): Promise<void> {
+  if (testRunIds.length === 0) return
   const supabase = sb(supabaseClient)
-  const hasExisting =
-    !!existing &&
-    BASELINE_METRIC_KEYS.every((k) => existing[k] != null && Number.isFinite(Number(existing[k])))
-  const n = Math.max(0, Number(existing?.sample_count ?? 0))
 
-  const next = {} as BaselineMetrics
-  for (const k of BASELINE_METRIC_KEYS) {
-    if (!hasExisting || n <= 0) {
-      next[k] = round2Metric(current[k])
-    } else {
-      next[k] = round2Metric((Number(existing![k]) * n + current[k]) / (n + 1))
-    }
+  const { data: rows, error: sErr } = await supabase
+    .from("analysis_scores")
+    .select("ttr, asl, verbs, adjs, punct")
+    .eq("student_id", studentId)
+    .in("analysis_run_id", testRunIds)
+  if (sErr) throw sErr
+  if (!rows?.length) return
+
+  const sums = { ttr: 0, asl: 0, verbs: 0, adjs: 0, punct: 0 }
+  let n = 0
+  for (const row of rows) {
+    if (BASELINE_METRIC_KEYS.some((k) => row[k] == null || !Number.isFinite(Number(row[k])))) continue
+    for (const k of BASELINE_METRIC_KEYS) sums[k] += Number(row[k])
+    n++
   }
+  if (n === 0) return
 
   const now = new Date().toISOString()
-  const full = { student_id: studentId, ...next, sample_count: n + 1, updated_at: now }
-  let { error } = await supabase
-    .from("student_baselines")
-    .upsert(full, { onConflict: "student_id" })
+  const next = {} as BaselineMetrics
+  for (const k of BASELINE_METRIC_KEYS) next[k] = round2Metric(sums[k] / n)
 
-  // Backward-compat: DB without `sample_count` → blend (old+new)/2 and write without count.
+  const full = { student_id: studentId, ...next, sample_count: n, updated_at: now }
+  let { error } = await writeBaselineRow(supabase, studentId, full)
+
+  // Backward-compat: DB without `sample_count` → write the averaged metrics without it.
   if (error && isMissingColumnError(error)) {
-    const blended = {} as BaselineMetrics
-    for (const k of BASELINE_METRIC_KEYS) {
-      blended[k] = hasExisting ? round2Metric((Number(existing![k]) + current[k]) / 2) : round2Metric(current[k])
-    }
-    ;({ error } = await supabase
-      .from("student_baselines")
-      .upsert({ student_id: studentId, ...blended, updated_at: now }, { onConflict: "student_id" }))
+    ;({ error } = await writeBaselineRow(supabase, studentId, { student_id: studentId, ...next, updated_at: now }))
   }
 
   if (error) throw error
+}
+
+/**
+ * Write a baseline row via `upsert(onConflict: student_id)`. If the DB is missing
+ * the unique index (un-migrated → `42P10`), fall back to an explicit
+ * read → update-or-insert so the baseline still persists.
+ */
+async function writeBaselineRow(
+  supabase: SupabaseClient,
+  studentId: string,
+  payload: Record<string, unknown>,
+): Promise<{ error: unknown }> {
+  const { error } = await supabase
+    .from("student_baselines")
+    .upsert(payload, { onConflict: "student_id" })
+  if (!error || !isMissingUniqueConstraintError(error)) return { error }
+
+  const { data: existingRow } = await supabase
+    .from("student_baselines")
+    .select("student_id")
+    .eq("student_id", studentId)
+    .maybeSingle()
+  if (existingRow) {
+    return await supabase.from("student_baselines").update(payload).eq("student_id", studentId)
+  }
+  return await supabase.from("student_baselines").insert(payload)
 }
 
 // Get or create an analysis run for an assignment (one row per assignment, upserted)
