@@ -1,3 +1,16 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Full setup (run in this order from the repo root):
+#
+#   1. pnpm install                                  # Node/Next.js deps
+#   2. pip install -r requirements.txt                # Python deps (below)
+#   3. python -m spacy download ro_core_news_sm       # Romanian stylometry model
+#   4. Create .env.local with:
+#        NEXT_PUBLIC_SUPABASE_URL=
+#        NEXT_PUBLIC_SUPABASE_ANON_KEY=
+#        GEMINI_API_KEY=
+#   5. pnpm dev                                       # start the app
+# ─────────────────────────────────────────────────────────────────────────
+
 # Core ML / AI detection
 transformers>=4.40.0
 torch>=2.0.0
