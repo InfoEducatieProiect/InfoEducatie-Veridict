@@ -368,7 +368,7 @@ function UploadWorkspace({
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-15 right-6 z-40">
         <AnimatePresence>
           {stagedFile && (
             <motion.button
