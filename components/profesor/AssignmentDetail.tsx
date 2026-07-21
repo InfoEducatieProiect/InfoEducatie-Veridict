@@ -10,6 +10,7 @@ import {
 import useSWR, { mutate } from "swr"
 import { createClient } from "@/lib/supabase/client"
 import { loadAnalysisReportForAssignment } from "@/lib/analysis-report"
+import { runAssignmentAnalysis } from "@/lib/analyze-ai-stream"
 import { useLanguage } from "@/lib/i18n/language-provider"
 import {
   type Assignment, type AnalysisReport, type StudentScore, type Submission,
@@ -171,47 +172,8 @@ export default function AssignmentDetail({
 
   const runAiAnalysis = async (): Promise<AnalysisReport | null> => {
     try {
-      const res = await fetch("/api/analyze-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignment_id: assignment.id }),
-      })
-      // Validation/auth failures come back as plain JSON (non-2xx, not a stream).
-      if (!res.ok || !res.body) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(data.error || res.statusText)
-      }
-
-      // Success = NDJSON stream: {type:"progress"|"report"|"error", ...} per line.
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ""
-      let finalReport: AnalysisReport | null = null
-      let streamError: string | null = null
-
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split("\n")
-        buf = lines.pop() ?? ""
-        for (const line of lines) {
-          if (!line.trim()) continue
-          let evt: { type?: string; done?: number; total?: number; report?: AnalysisReport; error?: string }
-          try { evt = JSON.parse(line) } catch { continue }
-          if (evt.type === "progress") {
-            setAiProgress({ done: evt.done ?? 0, total: evt.total ?? 0 })
-          } else if (evt.type === "report") {
-            finalReport = evt.report ?? null
-          } else if (evt.type === "error") {
-            streamError = evt.error ?? "Analysis failed"
-          }
-        }
-      }
-
-      if (streamError) throw new Error(streamError)
-      if (!finalReport) throw new Error("Missing report in response")
-      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: finalReport! }))
+      const finalReport = await runAssignmentAnalysis(assignment.id, setAiProgress)
+      setAnalysisReports((prev) => ({ ...prev, [assignment.id]: finalReport }))
       mutate(`submissions-${assignment.id}`)
       return finalReport
     } catch (err) {

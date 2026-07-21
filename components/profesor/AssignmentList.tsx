@@ -11,13 +11,23 @@ interface AssignmentListProps {
   classes: ClassInfo[]
   onSelect: (a: Assignment) => void
   onNew: () => void
+  onBrowse: () => void
 }
 
-export default function AssignmentList({ assignments, classes, onSelect, onNew }: AssignmentListProps) {
+export default function AssignmentList({ assignments, classes, onSelect, onNew, onBrowse }: AssignmentListProps) {
   const { t, dateLocale } = useLanguage()
-  const [filterClass, setFilterClass] = useState<string | "ALL">("ALL")
+  // Filter can be "ALL", a type filter ("test"/"tema"), or a class code.
+  const [filterClass, setFilterClass] = useState<string>("ALL")
   const classOptions = classes.map((c) => c.code)
-  const filtered = filterClass === "ALL" ? assignments : assignments.filter((a) => a.class_code === filterClass)
+  const typeOptions = ["test", "tema"] as const
+  const isTypeFilter = filterClass === "test" || filterClass === "tema"
+  const filtered =
+    filterClass === "ALL"
+      ? assignments
+      : isTypeFilter
+        // Legacy rows without a `type` are treated as homework ("tema").
+        ? assignments.filter((a) => (a.type ?? "tema") === filterClass)
+        : assignments.filter((a) => a.class_code === filterClass)
 
   return (
     <div className="flex flex-col gap-6">
@@ -26,27 +36,44 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew }
           <h1 className="text-2xl font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.myAssignments")}</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.myAssignmentsSubtitle")}</p>
         </div>
-        <button onClick={onNew}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 self-start sm:self-auto"
-          style={{ background: "var(--dash-navy)" }}>
-          <Plus size={16} aria-hidden="true" />{t("dashboardProfesor.newAssignment")}
-        </button>
+        <div className="flex flex-col gap-2 self-start sm:self-auto sm:items-end">
+          <button onClick={onNew}
+            className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 sm:w-auto"
+            style={{ background: "var(--dash-navy)" }}>
+            <Plus size={16} aria-hidden="true" />{t("dashboardProfesor.newAssignment")}
+          </button>
+          <button onClick={onBrowse}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold shadow-sm transition-all hover:border-blue-300 hover:shadow-md active:scale-95 sm:w-auto"
+            style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)", color: "var(--dash-fg)" }}>
+            <Users size={16} aria-hidden="true" />{t("dashboardProfesor.browseBtn")}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Filter size={14} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.filterClass")}</span>
-        {(["ALL", ...classOptions] as const).map((c) => (
-          <button key={c} onClick={() => setFilterClass(c)}
-            className="rounded-full px-3 py-1 text-xs font-bold transition-all"
-            style={{
-              background: filterClass === c ? "var(--dash-navy)" : "var(--dash-card)",
-              color: filterClass === c ? "#fff" : "var(--dash-muted)",
-              border: `1px solid ${filterClass === c ? "var(--dash-navy)" : "var(--dash-border)"}`,
-            }}>
-            {c === "ALL" ? t("common.all") : c}
-          </button>
-        ))}
+        {(["ALL", ...typeOptions, ...classOptions] as const).map((c) => {
+          const label =
+            c === "ALL"
+              ? t("common.all")
+              : c === "test"
+                ? t("dashboardProfesor.typeOptionTest")
+                : c === "tema"
+                  ? t("dashboardProfesor.typeOptionTema")
+                  : c
+          return (
+            <button key={c} onClick={() => setFilterClass(c)}
+              className="rounded-full px-3 py-1 text-xs font-bold transition-all"
+              style={{
+                background: filterClass === c ? "var(--dash-navy)" : "var(--dash-card)",
+                color: filterClass === c ? "#fff" : "var(--dash-muted)",
+                border: `1px solid ${filterClass === c ? "var(--dash-navy)" : "var(--dash-border)"}`,
+              }}>
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -112,7 +139,13 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew }
           <div className="col-span-2 flex flex-col items-center gap-3 rounded-2xl border border-dashed py-16 text-center" style={{ borderColor: "var(--dash-border)" }}>
             <AlertTriangle size={28} style={{ color: "var(--dash-muted)" }} aria-hidden="true" />
             <p className="text-sm" style={{ color: "var(--dash-muted)" }}>
-              {filterClass === "ALL" ? t("dashboardProfesor.noAssignmentsAll") : t("dashboardProfesor.noAssignmentsClass", { class: filterClass })}
+              {filterClass === "ALL"
+                ? t("dashboardProfesor.noAssignmentsAll")
+                : isTypeFilter
+                  ? t("dashboardProfesor.noAssignmentsType", {
+                      type: filterClass === "test" ? t("dashboardProfesor.typeOptionTest") : t("dashboardProfesor.typeOptionTema"),
+                    })
+                  : t("dashboardProfesor.noAssignmentsClass", { class: filterClass })}
             </p>
           </div>
         )}

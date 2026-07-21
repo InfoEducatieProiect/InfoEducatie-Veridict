@@ -291,7 +291,7 @@ export default function WebScannerPanel({
                       className="shrink-0 rounded-full px-3 py-1 text-xs font-black"
                       style={{ background: bg, color: text }}
                     >
-                      {pct}% Match
+                      {pct}% {t("forensic.webMatchSuffix")}
                     </span>
                   </div>
                 )
