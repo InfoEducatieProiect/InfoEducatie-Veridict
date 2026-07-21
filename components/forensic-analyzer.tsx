@@ -21,8 +21,6 @@ interface ForensicAnalyzerProps {
   studentName: string
   score: StudentScore
   onBack: () => void
-  /** Overrides the default "back to table" wording when opened from elsewhere. */
-  backLabel?: string
   assignmentId: string
   submissionId: string
   submissionTexts: Record<string, string>
@@ -58,7 +56,6 @@ export default function ForensicAnalyzer({
   studentName,
   score,
   onBack,
-  backLabel,
   assignmentId,
   submissionId,
   submissionTexts,
@@ -99,10 +96,10 @@ export default function ForensicAnalyzer({
           onClick={onBack}
           className="flex items-center gap-2 rounded-xl border p-3 md:px-4 md:py-2.5 text-sm md:text-base font-medium cursor-pointer active:scale-95 transition-all select-none"
           style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)", color: "var(--dash-fg)" }}
-          aria-label={backLabel ?? t("forensic.backToTable")}
+          aria-label={t("forensic.backToTable")}
         >
           <ArrowLeft size={16} aria-hidden="true" />
-          <span className="hidden sm:inline">{backLabel ?? t("forensic.backToTable")}</span>
+          <span className="hidden sm:inline">{t("forensic.backToTable")}</span>
         </button>
         <span className="text-xs select-none" style={{ color: "var(--dash-border)" }}>/</span>
         <span className="text-xs font-semibold truncate max-w-[200px]" style={{ color: "var(--dash-accent)" }}>

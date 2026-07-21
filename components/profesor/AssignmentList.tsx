@@ -11,10 +11,9 @@ interface AssignmentListProps {
   classes: ClassInfo[]
   onSelect: (a: Assignment) => void
   onNew: () => void
-  onBrowse: () => void
 }
 
-export default function AssignmentList({ assignments, classes, onSelect, onNew, onBrowse }: AssignmentListProps) {
+export default function AssignmentList({ assignments, classes, onSelect, onNew }: AssignmentListProps) {
   const { t, dateLocale } = useLanguage()
   // Filter can be "ALL", a type filter ("test"/"tema"), or a class code.
   const [filterClass, setFilterClass] = useState<string>("ALL")
@@ -36,18 +35,11 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew, 
           <h1 className="text-2xl font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardProfesor.myAssignments")}</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--dash-muted)" }}>{t("dashboardProfesor.myAssignmentsSubtitle")}</p>
         </div>
-        <div className="flex flex-col gap-2 self-start sm:self-auto sm:items-end">
-          <button onClick={onNew}
-            className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 sm:w-auto"
-            style={{ background: "var(--dash-navy)" }}>
-            <Plus size={16} aria-hidden="true" />{t("dashboardProfesor.newAssignment")}
-          </button>
-          <button onClick={onBrowse}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold shadow-sm transition-all hover:border-blue-300 hover:shadow-md active:scale-95 sm:w-auto"
-            style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)", color: "var(--dash-fg)" }}>
-            <Users size={16} aria-hidden="true" />{t("dashboardProfesor.browseBtn")}
-          </button>
-        </div>
+        <button onClick={onNew}
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:opacity-90 active:scale-95 self-start sm:self-auto"
+          style={{ background: "var(--dash-navy)" }}>
+          <Plus size={16} aria-hidden="true" />{t("dashboardProfesor.newAssignment")}
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

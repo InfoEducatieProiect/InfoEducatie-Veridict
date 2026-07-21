@@ -14,7 +14,6 @@ import type { StylometryMetrics, StylometryVerdict } from "@/lib/stylometry-type
 import { useLanguage } from "@/lib/i18n/language-provider"
 import { mergeStylometryIntoScore } from "@/lib/profesor-utils"
 import AssignmentList from "./profesor/AssignmentList"
-import ClassBrowser from "./profesor/ClassBrowser"
 import AssignmentDetail from "./profesor/AssignmentDetail"
 import CreateAssignmentModal from "./profesor/CreateAssignmentModal"
 import type { Assignment, AnalysisReport, StudentScore, ClassInfo, SchoolClass } from "./profesor/types"
@@ -60,20 +59,9 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
   // ?a=<assignmentId>              → Level 2 (assignment detail)
   // ?a=…&sub=<submissionId>        → Level 3 (forensic view)
   // ?a=…&sub=…&tab=<tabId>         → forensic sub-tab
-  //
-  // Parallel branch — the class/student browser (?a always takes precedence):
-  // ?browse=1                      → class cards
-  // ?browse=1&cls=<classId>        → students in that class
-  // ?browse=1&cls=…&stu=<studentId> → that student's submissions
   const aParam = searchParams.get("a")
   const subParam = searchParams.get("sub")
   const tabParam = searchParams.get("tab")
-  const browseParam = searchParams.get("browse")
-  const clsParam = searchParams.get("cls")
-  const stuParam = searchParams.get("stu")
-  // Records that the forensic view was entered from the browser, so its back
-  // button returns there instead of falling through to the assignment table.
-  const fromParam = searchParams.get("from")
 
   const selectedAssignment = useMemo(
     () => assignments.find((a) => a.id === aParam) ?? null,
@@ -82,18 +70,11 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
   // While ?a is set but SWR hasn't resolved the assignment yet, show a loader
   // instead of flashing the list.
   const assignmentPending = !!aParam && !selectedAssignment && assignmentsLoading
-  const view: "list" | "detail" | "browse" = selectedAssignment
-    ? "detail"
-    : browseParam
-      ? "browse"
-      : "list"
+  const view: "list" | "detail" = selectedAssignment ? "detail" : "list"
 
   // Rebuild the query string from the current params + patch (null keys dropped).
   const navigate = (
-    patch: {
-      a?: string | null; sub?: string | null; tab?: string | null
-      browse?: string | null; cls?: string | null; stu?: string | null; from?: string | null
-    },
+    patch: { a?: string | null; sub?: string | null; tab?: string | null },
     mode: "push" | "replace" = "push",
   ) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -134,31 +115,9 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
 
   // Level-2 selection → URL only. AssignmentDetail rebuilds the rich forensic
   // state from the URL, so both clicks and cold deep-links share one path.
-  // Selecting/leaving an assignment clears the browser params so they don't
-  // leak into an unrelated view.
-  const handleSelect = (a: Assignment) =>
-    navigate({ a: a.id, sub: null, tab: null, browse: null, cls: null, stu: null, from: null }, "push")
-  const handleBack = () =>
-    navigate({ a: null, sub: null, tab: null, browse: null, cls: null, stu: null, from: null }, "push")
-
-  // Back out of the forensic view to wherever it was opened from. Restoring
-  // browse=1 with cls/stu still in the URL lands on the student's submissions.
-  const handleBackFromForensic = () =>
-    fromParam === "browse"
-      ? navigate({ a: null, sub: null, tab: null, from: null, browse: "1" }, "push")
-      : navigate({ sub: null, tab: null }, "push")
-
-  // ─── Class/student browser ──────────────────────────────────────────────────
-  const handleOpenBrowser = () => navigate({ browse: "1", cls: null, stu: null }, "push")
-  const handleCloseBrowser = () => navigate({ browse: null, cls: null, stu: null }, "push")
-  const handleSelectClass = (classId: string | null) => navigate({ cls: classId, stu: null }, "push")
-  const handleSelectStudent = (studentId: string | null) => navigate({ stu: studentId }, "push")
-
-  // Browser → forensic. `cls`/`stu` deliberately stay in the URL (?a takes
-  // precedence in the view derivation) so backing out can restore the exact
-  // submission list; `from` records that origin.
-  const handleOpenAnalysisFromBrowser = (assignmentId: string, submissionId: string) =>
-    navigate({ a: assignmentId, sub: submissionId, tab: "graph", browse: null, from: "browse" }, "push")
+  const handleSelect = (a: Assignment) => navigate({ a: a.id, sub: null, tab: null }, "push")
+  const handleBack = () => navigate({ a: null, sub: null, tab: null }, "push")
+  const handleBackFromForensic = () => navigate({ sub: null, tab: null }, "push")
 
   // Detalii button → set ?sub (+ default tab). The URL drives the actual open.
   const handleRequestForensic = (submissionId: string) =>
@@ -298,23 +257,7 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
           )}
           {view === "list" && !assignmentPending && (
             <motion.div key="list" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={{ duration: 0.25 }}>
-              <AssignmentList assignments={assignments} classes={classes} onSelect={handleSelect} onNew={() => setShowModal(true)} onBrowse={handleOpenBrowser} />
-            </motion.div>
-          )}
-          {view === "browse" && (
-            <motion.div key="browse" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
-              <ClassBrowser
-                professorId={userId}
-                classes={classes}
-                assignments={assignments}
-                selectedClassId={clsParam}
-                selectedStudentId={stuParam}
-                onSelectClass={handleSelectClass}
-                onSelectStudent={handleSelectStudent}
-                onClose={handleCloseBrowser}
-                onOpenAnalysis={handleOpenAnalysisFromBrowser}
-                setAnalysisReports={setAnalysisReports}
-              />
+              <AssignmentList assignments={assignments} classes={classes} onSelect={handleSelect} onNew={() => setShowModal(true)} />
             </motion.div>
           )}
           {view === "detail" && selectedAssignment && (
@@ -340,7 +283,6 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
                     stilometric: forensicData.score.stilometric === "Abatere Stilistica" ? "Abatere Stilistică" : "Stil Consistent",
                   }}
                   onBack={handleBackFromForensic}
-                  backLabel={fromParam === "browse" ? t("dashboardProfesor.browseBackToSubmissions") : undefined}
                   initialTab={tabParam ?? undefined}
                   onTabChange={(tb) => navigate({ tab: tb }, "replace")}
                   assignmentId={forensicData.assignmentId}

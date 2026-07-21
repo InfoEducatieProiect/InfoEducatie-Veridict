@@ -307,66 +307,6 @@ export async function getStudentSubmissions(studentId: string): Promise<(Submiss
   }))
 }
 
-/** A student's submission enriched with its parent assignment's metadata. */
-export interface ProfessorStudentSubmission extends Submission {
-  assignment_title?: string
-  assignment_type?: "tema" | "test"
-  assignment_deadline?: string
-  assignment_class_code?: string
-}
-
-const PROF_STUDENT_SUB_SELECT =
-  "*, assignments!inner(id, title, type, deadline, professor_id, classes(code))"
-const PROF_STUDENT_SUB_SELECT_LEGACY =
-  "*, assignments!inner(id, title, deadline, professor_id, classes(code))"
-
-/**
- * Every submission this student has ever made, restricted to assignments owned
- * by `professorId`. The `!inner` join is what makes the
- * `assignments.professor_id` filter actually restrict rows — with a plain embed
- * PostgREST returns every submission and just nulls the embedded object.
- */
-export async function getStudentSubmissionsForProfessor(
-  studentId: string,
-  professorId: string,
-  supabaseClient?: SupabaseClient,
-): Promise<ProfessorStudentSubmission[]> {
-  const supabase = sb(supabaseClient)
-  const run = (select: string) =>
-    supabase
-      .from("submissions")
-      .select(select)
-      .eq("student_id", studentId)
-      .eq("assignments.professor_id", professorId)
-      .order("submitted_at", { ascending: false })
-
-  let res = await run(PROF_STUDENT_SUB_SELECT)
-  // Backward-compat: retry without `type` if the column hasn't been migrated yet.
-  if (res.error && isMissingColumnError(res.error)) {
-    res = await run(PROF_STUDENT_SUB_SELECT_LEGACY)
-  }
-  if (res.error) throw res.error
-
-  return (res.data || []).map((s) => {
-    const a = (s as {
-      assignments?: {
-        title?: string
-        type?: "tema" | "test"
-        deadline?: string
-        classes?: { code?: string }
-      }
-    }).assignments
-    return {
-      ...(s as object),
-      assignment_title: a?.title,
-      // Legacy rows without a `type` are treated as homework ("tema").
-      assignment_type: a?.type ?? "tema",
-      assignment_deadline: a?.deadline,
-      assignment_class_code: a?.classes?.code,
-    } as ProfessorStudentSubmission
-  })
-}
-
 // Get submissions for an assignment (professor view)
 export async function getSubmissionsForAssignment(
   assignmentId: string,
@@ -670,51 +610,12 @@ export async function updateSubmissionAnalysis(
   supabaseClient?: SupabaseClient,
 ): Promise<void> {
   const supabase = sb(supabaseClient)
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("submissions")
     .update({ analysed: true, ai_score: aiScore })
     .eq("id", submissionId)
-    .select("id")
-
+  
   if (error) throw error
-  // An UPDATE filtered out by RLS returns 204/no-error while affecting 0 rows,
-  // which is how `submissions.analysed` silently stayed false for every
-  // analysis before migration 20260721120000. Warn rather than throw: throwing
-  // would reject the Promise.all in analysis-report-persist and abort the whole
-  // run on any deployment that hasn't applied that migration yet.
-  if (!data || data.length === 0) {
-    console.warn(
-      `[Veridict] updateSubmissionAnalysis affected 0 rows for submission ${submissionId} — ` +
-        "the submissions UPDATE policy is probably missing (see migration 20260721120000).",
-    )
-  }
-}
-
-/**
- * Submission ids that have an `analysis_scores` row — the authoritative
- * "has been analysed" signal.
- *
- * Prefer this over `submissions.analysed`, which is unreliable: its UPDATE runs
- * under the professor's session and was silently blocked by RLS until migration
- * 20260721120000, so historical rows read false despite having been analysed.
- */
-export async function getAnalysedSubmissionIds(
-  submissionIds: string[],
-  supabaseClient?: SupabaseClient,
-): Promise<Set<string>> {
-  if (submissionIds.length === 0) return new Set()
-  const supabase = sb(supabaseClient)
-  const { data, error } = await supabase
-    .from("analysis_scores")
-    .select("submission_id")
-    .in("submission_id", submissionIds)
-
-  if (error) throw error
-  return new Set(
-    (data ?? [])
-      .map((r) => (r as { submission_id?: string | null }).submission_id)
-      .filter((id): id is string => !!id),
-  )
 }
 
 // Get the latest analysis run for an assignment (newest first: created_at → ran_at → id)
