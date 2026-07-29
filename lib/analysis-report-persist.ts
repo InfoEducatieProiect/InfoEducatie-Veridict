@@ -50,7 +50,6 @@ async function fetchAssignmentType(
     .select("type")
     .eq("id", assignmentId)
     .maybeSingle()
-  // Missing column / row → treat as homework.
   if (error || !data) return "tema"
   return (data as { type?: string }).type === "test" ? "test" : "tema"
 }
@@ -76,9 +75,6 @@ export async function persistAnalysisReport(
     submissions.map((s) => s.studentId),
   )
 
-  // Is this assignment a TEST? Tests establish/update the stylometric baseline
-  // instead of only being measured against it. Default to "tema" (homework) when
-  // the `type` column is absent (un-migrated DB).
   const assignmentType = await fetchAssignmentType(supabase, assignmentId)
   const built = await buildAnalysisReport(
     assignmentId,
@@ -88,8 +84,6 @@ export async function persistAnalysisReport(
   )
   const report = built.report
 
-  // Radar stilometric — batched spaCy for the whole class in ONE Python spawn
-  // (one `ro_core_news_sm` load), replacing the old per-submission client loop.
   const styloBatch = await runStylometryBatch(
     submissions.map((sub) => ({
       id: sub.id,
@@ -107,11 +101,9 @@ export async function persistAnalysisReport(
     let stilometricDev: number
     let dbStylo: ReturnType<typeof stylometryMetricsToDbColumns>
     if (spa) {
-      // Real spaCy metrics — identical to the old per-submission route output.
       stilometricDev = spa.deviation
       dbStylo = stylometryMetricsToDbColumns(spa.metrics)
     } else {
-      // Fallback when Python/spaCy is unavailable: previous TS heuristic.
       const dbBaseline = baselineFromRow(baselinesByStudentId[sub.studentId])
       stilometricDev = computedToDbStilometric(sub.studentName, sub.text ?? "", dbBaseline)
       dbStylo = stylometryMetricsToDbColumns(computeRawStylometricPercentages(sub.text ?? ""))
@@ -134,9 +126,6 @@ export async function persistAnalysisReport(
 
   const insertedScores = await saveAnalysisScores(scoreRows, supabase)
 
-  // TEST assignments: recompute each student's baseline as the mean of their
-  // analysis_scores across every TEST assignment (runs after the fresh row above
-  // is persisted, so it's included). Homework leaves the baseline untouched.
   if (assignmentType === "test") {
     const testRunIds = await getTestAssignmentRunIds(supabase)
     const studentIds = [...new Set(submissions.map((s) => s.studentId))]
@@ -153,7 +142,6 @@ export async function persistAnalysisReport(
     }
   }
 
-  // Reuse the similarity pass already computed in buildAnalysisReport (no recompute).
   const cazuri: CazSuspect[] = built.cazuri
   const edgesGte50 = built.edgesGte50
 
@@ -208,8 +196,6 @@ export async function persistAnalysisReport(
     const sc = report.scores[sub.studentName]
     if (!sc || !inserted?.id) continue
 
-    // Overwrite the UI stylometry fields with the batched spaCy result so the
-    // radar renders accurate values straight from this single request.
     const spa = styloBatch[sub.id]
     const styloFields = spa
       ? {

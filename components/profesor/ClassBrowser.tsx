@@ -15,15 +15,6 @@ import {
 import StudentSubmissionsList from "./StudentSubmissionsList"
 import type { Assignment, AnalysisReport, ClassInfo } from "./types"
 
-/**
- * Submissions plus their analysed state in one fetch, so the table never
- * renders rows before it knows which of them have been analysed.
- *
- * The analysed state comes from `analysis_scores`, not `submissions.analysed` —
- * that flag's UPDATE was silently blocked by RLS until migration
- * 20260721120000, so it reads false for every historically analysed row.
- */
-/** Stable identity so a loading render doesn't churn the prop each time. */
 const EMPTY_IDS: Set<string> = new Set()
 
 async function fetchStudentWork(studentId: string, professorId: string) {
@@ -63,8 +54,6 @@ export default function ClassBrowser({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // One roster query serves both the L1 counts and the L2 list, so drilling
-  // from a class into its students needs no extra fetch.
   const { data: allStudents = [], isLoading: studentsLoading } = useSWR(
     "browse-all-students",
     getAllStudents,
@@ -86,7 +75,6 @@ export default function ClassBrowser({
     return map
   }, [assignments])
 
-  // A ?cls that matches no class (stale/hand-edited URL) falls back to L1.
   const activeClass = useMemo(
     () => classes.find((c) => c.id === selectedClassId) ?? null,
     [classes, selectedClassId],
@@ -114,10 +102,6 @@ export default function ClassBrowser({
     return classStudents.filter((s) => (s.display_name ?? "").toLowerCase().includes(q))
   }, [classStudents, query])
 
-  // ─── Run-then-open ──────────────────────────────────────────────────────────
-  // An analysed submission needs only the URL: AssignmentDetail mounts, loads
-  // the report and auto-opens the forensic view. An un-analysed one does not —
-  // that effect bails on `!report` — so the run must complete first.
   const handleAction = async (row: ProfessorStudentSubmission, isAnalysed: boolean) => {
     if (isAnalysed) {
       onOpenAnalysis(row.assignment_id, row.id)
@@ -128,8 +112,6 @@ export default function ClassBrowser({
     setRunningSubmissionId(row.id)
     try {
       const report = await runAssignmentAnalysis(row.assignment_id, setProgress)
-      // Warm the parent cache so AssignmentDetail's auto-open effect fires on
-      // its first render instead of flashing an un-analysed table.
       setAnalysisReports((prev) => ({ ...prev, [row.assignment_id]: report }))
       await Promise.all([
         mutate(`submissions-${row.assignment_id}`),
@@ -179,7 +161,6 @@ export default function ClassBrowser({
 
   return (
     <div className="flex flex-col gap-6" aria-label={t("dashboardProfesor.browseBrowserAria")}>
-      {/* Rendered outside the AnimatePresence so the header stays put between levels. */}
       <div className="flex flex-col gap-4">
         <button type="button" onClick={handleBack}
           className="flex w-fit items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold transition-colors hover:bg-slate-100 dark:hover:bg-white/5"

@@ -22,7 +22,6 @@ export default async function ProfesorDashboardPage() {
     redirect("/")
   }
 
-  // Get all classes for the professor
   const { data: classes } = await supabase
     .from("classes")
     .select("id, code")

@@ -45,7 +45,6 @@ function readPersistedLocale(): Locale {
     const ls = localStorage.getItem("lang")
     if (ls === "en" || ls === "ro") return ls
   } catch {
-    // SSR or blocked storage
   }
   return "ro"
 }
@@ -56,7 +55,6 @@ function persistLocale(locale: Locale) {
     localStorage.setItem("lang", locale)
     document.documentElement.lang = locale === "ro" ? "ro" : "en"
   } catch {
-    // ignore
   }
 }
 

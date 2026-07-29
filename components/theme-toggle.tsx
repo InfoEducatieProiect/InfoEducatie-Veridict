@@ -14,10 +14,8 @@ export default function ThemeToggle() {
 
   useEffect(() => setMounted(true), [])
 
-  // Hidden on the login/landing page — the switch appears only after login.
   if (pathname === "/") return null
 
-  // Avoid SSR/hydration mismatch: theme is only known on the client.
   if (!mounted) return null
 
   const isDark = (theme === "system" ? resolvedTheme : theme) === "dark"

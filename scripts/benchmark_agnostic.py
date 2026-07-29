@@ -1,7 +1,3 @@
-"""
-Multi-domain score distribution check — detects clustering in 19% / 37% / 50% bands.
-Requires: pip install -r requirements.txt
-"""
 from __future__ import annotations
 
 import json

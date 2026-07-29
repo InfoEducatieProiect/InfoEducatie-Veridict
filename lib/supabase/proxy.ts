@@ -29,12 +29,10 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // IMPORTANT: Do not run code between createServerClient and getUser()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protected routes - redirect to home if not logged in
   const protectedPaths = ['/dashboard']
   const isProtectedPath = protectedPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
@@ -46,9 +44,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If logged in user tries to access home page, redirect to their dashboard
   if (request.nextUrl.pathname === '/' && user) {
-    // Get user profile to determine role
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')

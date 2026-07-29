@@ -74,7 +74,6 @@ function runPythonBatch(
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString()
       stderr += text
-      // Parse "[progress] done/total" lines as they stream in.
       stderrLineBuf += text
       const lines = stderrLineBuf.split(/\r?\n/)
       stderrLineBuf = lines.pop() ?? ""
@@ -153,12 +152,6 @@ function runPythonBatch(
   })
 }
 
-/**
- * Batch hybrid AI scores keyed by submission id.
- * Falls back to TypeScript ensemble if Python/RoBERTa is unavailable.
- * `onProgress(done, total)` fires per submission as the Python detector streams
- * progress on stderr (used for the real "3/12" analysis counter).
- */
 export async function runHybridAiBatch(
   texts: TextAnalysisInput[],
   onProgress?: AiProgressCallback,

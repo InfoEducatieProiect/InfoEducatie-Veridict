@@ -1,4 +1,3 @@
-"""Phase 2 validation: human narrative low, EN AI above human, RO AI essays diverge smoothly."""
 import json
 import subprocess
 import sys

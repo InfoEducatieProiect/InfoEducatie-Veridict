@@ -22,7 +22,6 @@ export default async function ElevDashboardPage() {
     redirect("/")
   }
 
-  // Get class info
   let classCode = "Neasignat"
   if (profile.class_id) {
     const { data: classInfo } = await supabase

@@ -2,10 +2,6 @@ import "server-only"
 
 import type { SubmissionInput } from "./analysis-report"
 
-/**
- * Schema-agnostic document unit for the hybrid AI pipeline.
- * Maps cleanly to any store that exposes id, author key, display label, and body text.
- */
 export interface AnalyzableDocument {
   recordId: string
   authorKey: string
@@ -23,10 +19,6 @@ export interface RawAnalyzableRow {
 
 const DEFAULT_AUTHOR_PREFIX = "Author"
 
-/**
- * Normalizes arbitrary submission-like rows into analyzable documents.
- * Filters to rows with non-empty body and optional submission timestamp.
- */
 export function mapRowsToAnalyzableDocuments(
   rows: RawAnalyzableRow[],
   options?: { requireSubmitted?: boolean },
@@ -62,7 +54,6 @@ export function mapDocumentsToSubmissionInputs(
   }))
 }
 
-/** Score payload for persisting back to analysis_scores / submissions. */
 export interface PersistableAiScore {
   recordId: string
   aiScore: number

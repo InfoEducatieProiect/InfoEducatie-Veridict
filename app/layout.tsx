@@ -33,7 +33,6 @@ export default function RootLayout({
   return (
     <html lang="ro" suppressHydrationWarning className={`${inter.variable} bg-background`}>
       <head>
-        {/* Anti-flash: read lang cookie before React hydrates */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var c=document.cookie.split(';').find(function(s){return s.trim().startsWith('lang=')});var l=c?c.split('=')[1].trim():localStorage.getItem('lang');if(l==='en')document.documentElement.lang='en';}catch(e){}})()`,

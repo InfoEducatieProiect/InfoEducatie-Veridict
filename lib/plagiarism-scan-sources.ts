@@ -7,7 +7,6 @@ export interface ScanSourceRow {
   similarity_score: number
 }
 
-/** Collapse duplicate URLs (keeps highest similarity_score), newest-first order. */
 export function dedupeScanSources(rows: ScanSourceRow[]): ScanSourceRow[] {
   const byUrl = new Map<string, ScanSourceRow>()
   for (const row of rows) {
@@ -24,7 +23,6 @@ export function dedupeScanSources(rows: ScanSourceRow[]): ScanSourceRow[] {
   )
 }
 
-/** Verdict from stored DB percentages only — no client-side amplification. */
 export function buildVerdictFromPercent(topScor: number): string {
   if (topScor >= 40) {
     return `❌ ALERTĂ DETECTATĂ: Text preluat de pe internet (Similitudine Cosinus: ${topScor.toFixed(1)}%).`
@@ -35,7 +33,6 @@ export function buildVerdictFromPercent(topScor: number): string {
   return `✅ TEXT AUTENTIC: Text original în raport cu indexul public online.`
 }
 
-/** Build API/UI report shape from `scan_sources` rows (percentages 0–100). */
 export function plagiarismReportFromScanSources(
   sources: ScanSourceRow[],
 ): PlagiarismWebReport {
@@ -69,7 +66,6 @@ export async function fetchScanSourcesForSubmission(
   return dedupeScanSources((data ?? []) as ScanSourceRow[])
 }
 
-/** Batch load scan_sources keyed by submission_id. */
 export async function fetchScanSourcesMapBySubmissionIds(
   supabase: SupabaseClient,
   submissionIds: string[],
@@ -103,13 +99,11 @@ export async function fetchScanSourcesMapBySubmissionIds(
   return map
 }
 
-/** Returns the highest similarity_score from a list of rows (0 if empty). */
 export function maxSimilarityFromRows(rows: ScanSourceRow[]): number {
   if (!rows.length) return 0
   return rows.reduce((m, r) => Math.max(m, Number(r.similarity_score)), 0)
 }
 
-/** Python `scor` / `scor_maxim` may be 0–1 or 0–100; DB columns store percentage 0–100. */
 export function plagiarismScorToPercent(value: number): number {
   if (value <= 0) return 0
   if (value <= 1) return Math.round(value * 1000) / 10

@@ -1,7 +1,3 @@
-/**
- * Builds, persists, and loads analysis reports via Supabase.
- * Similarity core: cosine TF–IDF-like vectors + phrase Jaccard (see lib/analysisEngine.ts).
- */
 
 import type { HistoricBaseline } from "./assignment-store"
 import type { PlagiarismWebReport } from "./plagiarism-web"
@@ -43,9 +39,7 @@ export interface StudentScore {
   historicAdjectiveDensity: number
   historicPunctuationUsage: number
   peerMatches: { name: string; similarity: number }[]
-  /** Cached global web plagiarism (`scan_sources` per submission). */
   plagiarismWeb?: PlagiarismWebReport | null
-  /** Supabase ids for forensic stylometry API (camelCase + snake_case from API). */
   id?: string
   analysisScoreId?: string
   analysis_score_id?: string
@@ -53,9 +47,7 @@ export interface StudentScore {
   student_id?: string
   submissionId?: string
   submission_id?: string
-  /** Raw deviation % from analysis_scores.stilometric (spaCy pipeline). */
   stilometricDeviation?: number
-  /** Raw DB metrics (no UI scaling) for Recharts radar. */
   stylometryMetrics?: StylometryDbMetrics | null
   stylometryBaseline?: StylometryDbMetrics | null
 }
@@ -64,7 +56,6 @@ export interface AnalysisReport {
   assignmentId: string
   ranAt: string
   scores: Record<string, StudentScore>
-  /** Dedup unordered edges for Graful global (similarity ≥50%). */
   graphEdges?: { a: string; b: string; sim: number }[]
   graphNodes?: string[]
 }
@@ -158,24 +149,18 @@ function rebuildGraphFromRows(
   }
 }
 
-/** Încarcă ultimul raport pentru o temă. */
-/** Încarcă ultimul raport pentru o temă. */
 export async function loadAnalysisReportForAssignment(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisReport | null> {
-  // Fix pentru eroare: Folosește clientul primit ca parametru sau fallback pe createBrowserClient din importuri
   const supabase = supabaseClient ?? createBrowserClient()
 
-  // 1. Căutăm cea mai nouă rulare globală pentru această temă
   const run = await getLatestAnalysisRun(assignmentId, supabase)
   if (!run) return null
 
-  // 2. Extragem toate scorurile salvate pentru acea rulare
   const rows = await getAnalysisScoresWithPeers(run.id, supabase)
   if (!rows.length) return null
 
-  // 3. Extragem profilul istoric al elevilor (baselines)
   const baselinesByStudentId = await getStudentBaselines(supabase)
   
   const submissionIds = (rows as ScoreWithPeers[])
@@ -258,7 +243,6 @@ export async function loadAnalysisReportForAssignment(
       submission_id: row.submission_id ?? undefined,
       stilometricDeviation: deviation,
       
-      // CRUCIAL PENTRU RADAR: Obiectele care trimit datele live în grafic la refresh
       stylometryMetrics: rawMetrics,
       stylometryBaseline: rawBaseline,
     }

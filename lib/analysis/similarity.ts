@@ -1,6 +1,5 @@
 import { curata_si_sparge, gaseste_fraze_similare_ideatic } from "./text-utils"
 
-/** Rezultat pereche suspectă — aliniat cu motorul Python. */
 export interface CazSuspect {
   elev1: string
   elev2: string
@@ -9,12 +8,6 @@ export interface CazSuspect {
   fraze_elev2: string[]
 }
 
-/**
- * Sparse term-frequency profile: a word→count map plus the vector norm.
- * Replaces the old dense full-vocabulary array — the cosine value is identical,
- * but dot products iterate only the words a document actually contains
- * (O(avgDocLen)) instead of the whole global vocabulary (O(V)).
- */
 export interface SparseProfile {
   freq: Map<string, number>
   norma: number
@@ -28,7 +21,6 @@ export function buildSparseProfile(words: string[]): SparseProfile {
   return { freq, norma: Math.sqrt(sumSq) }
 }
 
-/** Cosine similarity (0–1) between two sparse profiles, iterating the smaller map. */
 export function cosineSparse(p1: SparseProfile, p2: SparseProfile): number {
   if (p1.norma === 0 || p2.norma === 0) return 0
   const [small, large] =
@@ -41,11 +33,6 @@ export function cosineSparse(p1: SparseProfile, p2: SparseProfile): number {
   return produs_scalar / (p1.norma * p2.norma)
 }
 
-/**
- * Motor hibrid Cosinus + Jaccard pe fraze (parafrază).
- * `baza_date_elevi`: map nume elev → text lucrare.
- * `prag_suspect`: prag cosinus global (implicit 0.45).
- */
 export function analizeaza_clasa_avansat(
   baza_date_elevi: Record<string, string>,
   prag_suspect = 0.45
@@ -177,7 +164,6 @@ export function peerSimilarityFromCazuri(
   }
 }
 
-/** Split text into overlapping k-grams of words (shingles). Returned as 0-100 scale. */
 export function generateShingles(text: string, k = 4): Set<string> {
   const words = text
     .toLowerCase()
@@ -191,7 +177,6 @@ export function generateShingles(text: string, k = 4): Set<string> {
   return shingles
 }
 
-/** Jaccard similarity between two shingle sets, returned as 0-100. */
 export function calculateJaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 0
   let intersection = 0
@@ -200,7 +185,6 @@ export function calculateJaccard(a: Set<string>, b: Set<string>): number {
   return Math.round((intersection / union) * 100)
 }
 
-/** Return the shingles that appear in both texts. */
 export function getMatchingShingles(a: Set<string>, b: Set<string>): Set<string> {
   const common = new Set<string>()
   for (const s of a) if (b.has(s)) common.add(s)
@@ -218,7 +202,6 @@ function buildWordVector(text: string): Map<string, number> {
   return freq
 }
 
-/** Cosine similarity between two texts, returned as 0-100. */
 export function calculateCosineSimilarity(text1: string, text2: string): number {
   const v1 = buildWordVector(text1)
   const v2 = buildWordVector(text2)

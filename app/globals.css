@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Veridict Color System — Deep Navy / White / Electric Blue */
+
   --background: #001F3F;
   --foreground: #FFFFFF;
 
@@ -35,35 +35,29 @@
 
   --radius: 0.75rem;
 
-  /* Node graph / mathematical grid overlay */
   --grid-color: rgba(59, 130, 246, 0.06);
   --node-color: rgba(59, 130, 246, 0.35);
 
-  /* Dashboard shell — off-white light theme */
   --dash-bg:     #F1F5F9;
   --dash-card:   #FFFFFF;
   --dash-navy:   #001F3F;
-  --dash-navy-text: #001F3F; /* navy text on light chips; flips to white in dark */
+  --dash-navy-text: #001F3F;
   --dash-accent: #3B82F6;
   --dash-fg:     #0F172A;
   --dash-muted:  #64748B;
   --dash-border: #E2E8F0;
 }
 
-/* Dark mode — overrides ONLY the dashboard shell tokens to a deep-navy palette.
-   Light mode (:root above) is left untouched. The landing/login page and shadcn
-   popovers keep the navy semantic tokens, so they look correct in both modes. */
 .dark {
   --dash-bg:     #0B1220;
   --dash-card:   #14203A;
   --dash-navy:   #06182F;
-  --dash-navy-text: #FFFFFF; /* navy-on-light-chip text becomes white in dark mode */
+  --dash-navy-text: #FFFFFF;
   --dash-accent: #3B82F6;
   --dash-fg:     #E5EDF7;
   --dash-muted:  #94A3B8;
   --dash-border: #24324A;
 
-  /* Graph overlay — brighten slightly for contrast on the darker canvas */
   --grid-color: rgba(59, 130, 246, 0.08);
   --node-color: rgba(96, 165, 250, 0.45);
 }

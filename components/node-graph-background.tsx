@@ -2,12 +2,6 @@
 
 import { useEffect, useRef } from "react"
 
-/**
- * NodeGraphBackground
- * Renders an animated mathematical node-graph on a <canvas> element.
- * Nodes drift slowly; nearby nodes are connected by faint electric-blue lines.
- */
-
 interface Node {
   x: number
   y: number
@@ -52,7 +46,6 @@ export default function NodeGraphBackground() {
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      /* Draw connections */
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const dx = nodes[i].x - nodes[j].x
@@ -70,7 +63,6 @@ export default function NodeGraphBackground() {
         }
       }
 
-      /* Draw nodes */
       for (const node of nodes) {
         ctx.beginPath()
         ctx.arc(node.x, node.y, NODE_RADIUS, 0, Math.PI * 2)
@@ -78,7 +70,6 @@ export default function NodeGraphBackground() {
         ctx.fill()
       }
 
-      /* Update positions */
       for (const node of nodes) {
         node.x += node.vx
         node.y += node.vy

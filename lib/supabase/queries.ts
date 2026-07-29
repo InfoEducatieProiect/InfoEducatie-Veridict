@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-/** Browser client by default; pass a server `createClient()` for Route Handlers. */
 function sb(client?: SupabaseClient): SupabaseClient {
   return client ?? createClient()
 }
@@ -17,11 +16,6 @@ function isMissingColumnError(error: unknown): boolean {
   )
 }
 
-/**
- * True when an `upsert(..., { onConflict })` fails because the target table has
- * no matching unique constraint/index (Postgres `42P10`). Happens on an
- * un-migrated DB where `student_baselines_student_id_key` doesn't exist yet.
- */
 function isMissingUniqueConstraintError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false
   const e = error as { code?: string; message?: string }
@@ -32,7 +26,6 @@ function isMissingUniqueConstraintError(error: unknown): boolean {
   )
 }
 
-/** Newest-first for in-memory rows when DB order cannot be relied on. */
 export function sortByCreatedAtDesc<T extends { created_at?: string | null }>(
   rows: T[],
 ): T[] {
@@ -42,8 +35,6 @@ export function sortByCreatedAtDesc<T extends { created_at?: string | null }>(
       new Date(a.created_at ?? 0).getTime(),
   )
 }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type UserRole = "elev" | "profesor"
 
@@ -70,9 +61,7 @@ export interface Assignment {
   deadline: string
   class_id: string
   created_at: string
-  /** "tema" (homework) or "test"; defaults to "tema" when the column is absent. */
   type?: "tema" | "test"
-  // Joined fields
   class_code?: string
   professor_name?: string
 }
@@ -96,7 +85,6 @@ export interface Submission {
   file_storage_path: string | null
   analysed: boolean
   ai_score: number | null
-  // Joined fields
   student_name?: string
 }
 
@@ -107,7 +95,6 @@ export interface StudentBaseline {
   verbs: number | null
   adjs: number | null
   punct: number | null
-  /** Number of tests averaged into this baseline; drives the running-average formula. */
   sample_count?: number | null
   updated_at: string
 }
@@ -127,7 +114,6 @@ export interface AnalysisScore {
   ai_score: number | null
   similarity: number | null
   stilometric: number | null
-  /** True when stylistic deviation is within acceptable bounds (typically deviation ≤ 40). */
   stilometric_consistent?: boolean | null
   ttr: number | null
   asl: number | null
@@ -135,7 +121,6 @@ export interface AnalysisScore {
   adjs: number | null
   punct: number | null
   created_at: string
-  // Joined fields
   student_name?: string
 }
 
@@ -147,11 +132,9 @@ export interface PeerMatch {
   fraze_elev1?: string[] | null
   fraze_elev2?: string[] | null
   created_at: string
-  // Joined fields
   peer_name?: string
 }
 
-/** Rows inserted into peer_matches */
 export type PeerMatchInsert = {
   analysis_score_id: string
   peer_student_id: string
@@ -160,9 +143,6 @@ export type PeerMatchInsert = {
   fraze_elev2: string[]
 }
 
-// ─── Query Functions ──────────────────────────────────────────────────────────
-
-// Get current user's profile
 export async function getCurrentProfile() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -177,7 +157,6 @@ export async function getCurrentProfile() {
   return profile
 }
 
-// Get all classes
 export async function getClasses(): Promise<ClassInfo[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -189,7 +168,6 @@ export async function getClasses(): Promise<ClassInfo[]> {
   return data || []
 }
 
-// Get students in a class
 export async function getStudentsByClass(classId: string): Promise<Profile[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -203,7 +181,6 @@ export async function getStudentsByClass(classId: string): Promise<Profile[]> {
   return data || []
 }
 
-// Get all students (for professors)
 export async function getAllStudents(): Promise<(Profile & { class_code?: string })[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -219,9 +196,6 @@ export async function getAllStudents(): Promise<(Profile & { class_code?: string
   }))
 }
 
-// ─── Assignment Functions ─────────────────────────────────────────────────────
-
-// Get assignments for a student (by their class)
 export async function getAssignmentsForStudent(classId: string): Promise<Assignment[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -238,7 +212,6 @@ export async function getAssignmentsForStudent(classId: string): Promise<Assignm
   }))
 }
 
-// Get all assignments (for professors)
 export async function getAssignmentsForProfessor(professorId: string): Promise<Assignment[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -254,7 +227,6 @@ export async function getAssignmentsForProfessor(professorId: string): Promise<A
   }))
 }
 
-// Create a new assignment
 export async function createAssignment(data: {
   professor_id: string
   title: string
@@ -271,7 +243,6 @@ export async function createAssignment(data: {
     .select("*, classes(code)")
     .single()
 
-  // Backward-compat: retry without `type` if the column hasn't been migrated yet.
   if (res.error && isMissingColumnError(res.error)) {
     const { type: _type, ...rest } = data
     res = await supabase
@@ -289,9 +260,6 @@ export async function createAssignment(data: {
   }
 }
 
-// ─── Submission Functions ─────────────────────────────────────────────────────
-
-// Get student's own submissions
 export async function getStudentSubmissions(studentId: string): Promise<(Submission & { assignment_title?: string })[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -307,7 +275,6 @@ export async function getStudentSubmissions(studentId: string): Promise<(Submiss
   }))
 }
 
-/** A student's submission enriched with its parent assignment's metadata. */
 export interface ProfessorStudentSubmission extends Submission {
   assignment_title?: string
   assignment_type?: "tema" | "test"
@@ -320,12 +287,6 @@ const PROF_STUDENT_SUB_SELECT =
 const PROF_STUDENT_SUB_SELECT_LEGACY =
   "*, assignments!inner(id, title, deadline, professor_id, classes(code))"
 
-/**
- * Every submission this student has ever made, restricted to assignments owned
- * by `professorId`. The `!inner` join is what makes the
- * `assignments.professor_id` filter actually restrict rows — with a plain embed
- * PostgREST returns every submission and just nulls the embedded object.
- */
 export async function getStudentSubmissionsForProfessor(
   studentId: string,
   professorId: string,
@@ -341,7 +302,6 @@ export async function getStudentSubmissionsForProfessor(
       .order("submitted_at", { ascending: false })
 
   let res = await run(PROF_STUDENT_SUB_SELECT)
-  // Backward-compat: retry without `type` if the column hasn't been migrated yet.
   if (res.error && isMissingColumnError(res.error)) {
     res = await run(PROF_STUDENT_SUB_SELECT_LEGACY)
   }
@@ -359,7 +319,6 @@ export async function getStudentSubmissionsForProfessor(
     return {
       ...(s as object),
       assignment_title: a?.title,
-      // Legacy rows without a `type` are treated as homework ("tema").
       assignment_type: a?.type ?? "tema",
       assignment_deadline: a?.deadline,
       assignment_class_code: a?.classes?.code,
@@ -367,7 +326,6 @@ export async function getStudentSubmissionsForProfessor(
   })
 }
 
-// Get submissions for an assignment (professor view)
 export async function getSubmissionsForAssignment(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
@@ -386,7 +344,6 @@ export async function getSubmissionsForAssignment(
   }))
 }
 
-/** Submissions turned in with non-empty essay text (live analysis input). */
 export function filterSubmittedWithText(rows: Submission[]): Submission[] {
   return rows.filter(
     (s) =>
@@ -404,7 +361,6 @@ export async function getSubmittedSubmissionsForAssignment(
   return filterSubmittedWithText(all)
 }
 
-// Check if student has submitted an assignment
 export async function hasStudentSubmitted(studentId: string, assignmentId: string): Promise<boolean> {
   const supabase = createClient()
   const { data } = await supabase
@@ -417,7 +373,6 @@ export async function hasStudentSubmitted(studentId: string, assignmentId: strin
   return !!data
 }
 
-// Create a submission
 export async function createSubmission(data: {
   student_id: string
   assignment_id: string
@@ -436,10 +391,6 @@ export async function createSubmission(data: {
   return submission
 }
 
-// ─── Analysis Functions ───────────────────────────────────────────────────────
-
-// Get student baselines. Pass `studentIds` to fetch only the rows needed for one
-// assignment instead of the entire table (avoids a growing full-table scan).
 export async function getStudentBaselines(
   supabaseClient?: SupabaseClient,
   studentIds?: string[],
@@ -471,12 +422,6 @@ function round2Metric(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-/**
- * All `analysis_runs.id` values belonging to TEST-type assignments. Fetch this
- * once per batch/analysis call and reuse across students — cheap, global (a
- * school's assignment count is small), and avoids depending on PostgREST
- * embedded-relationship syntax.
- */
 export async function getTestAssignmentRunIds(supabaseClient?: SupabaseClient): Promise<string[]> {
   const supabase = sb(supabaseClient)
   const { data: testAssignments, error: aErr } = await supabase
@@ -500,14 +445,6 @@ export async function getTestAssignmentRunIds(supabaseClient?: SupabaseClient): 
   return (runs || []).map((r) => r.id)
 }
 
-/**
- * Recompute a student's stylometric baseline as the arithmetic mean of their
- * `analysis_scores` across every TEST assignment they've been analyzed on.
- * `analysis_scores` is upserted on `(analysis_run_id, submission_id)`, so
- * re-analyzing the same test overwrites its single row rather than adding a
- * new sample — making this recompute idempotent under reruns. `sample_count`
- * reflects the number of distinct tests, not the number of analysis runs.
- */
 export async function recomputeStudentBaseline(
   studentId: string,
   testRunIds: string[],
@@ -540,7 +477,6 @@ export async function recomputeStudentBaseline(
   const full = { student_id: studentId, ...next, sample_count: n, updated_at: now }
   let { error } = await writeBaselineRow(supabase, studentId, full)
 
-  // Backward-compat: DB without `sample_count` → write the averaged metrics without it.
   if (error && isMissingColumnError(error)) {
     ;({ error } = await writeBaselineRow(supabase, studentId, { student_id: studentId, ...next, updated_at: now }))
   }
@@ -548,11 +484,6 @@ export async function recomputeStudentBaseline(
   if (error) throw error
 }
 
-/**
- * Write a baseline row via `upsert(onConflict: student_id)`. If the DB is missing
- * the unique index (un-migrated → `42P10`), fall back to an explicit
- * read → update-or-insert so the baseline still persists.
- */
 async function writeBaselineRow(
   supabase: SupabaseClient,
   studentId: string,
@@ -574,7 +505,6 @@ async function writeBaselineRow(
   return await supabase.from("student_baselines").insert(payload)
 }
 
-// Get or create an analysis run for an assignment (one row per assignment, upserted)
 export async function getOrCreateAnalysisRun(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
@@ -594,7 +524,6 @@ export async function getOrCreateAnalysisRun(
   return data
 }
 
-// Save analysis scores — upsert on (analysis_run_id, submission_id) so reruns overwrite in place
 export async function saveAnalysisScores(
   scores: Omit<AnalysisScore, "id" | "created_at" | "student_name">[],
   supabaseClient?: SupabaseClient,
@@ -614,7 +543,6 @@ export async function saveAnalysisScores(
   if (!first.error) return parse(first.data || [])
   if (!isMissingColumnError(first.error)) throw first.error
 
-  // Backward-compatible fallback for databases missing `stilometric_consistent`.
   const legacyScores = scores.map((s) => {
     const { stilometric_consistent: _ignored, ...rest } = s
     return rest
@@ -628,7 +556,6 @@ export async function saveAnalysisScores(
   return parse(second.data || [])
 }
 
-// Save peer matches — delete existing for these score IDs then insert fresh set
 export async function savePeerMatches(
   matches: PeerMatchInsert[],
   supabaseClient?: SupabaseClient,
@@ -637,7 +564,6 @@ export async function savePeerMatches(
   if (matches.length === 0) return
   const supabase = sb(supabaseClient)
 
-  // Delete stale peer_matches for the affected analysis_score rows before reinserting
   const idsToDelete =
     scoreIdsToWipe ??
     [...new Set(matches.map((m) => m.analysis_score_id))]
@@ -653,7 +579,6 @@ export async function savePeerMatches(
   if (!first.error) return
   if (!isMissingColumnError(first.error)) throw first.error
 
-  // Backward-compatible fallback for databases missing `fraze_elev1/fraze_elev2`.
   const legacyMatches = matches.map((m) => ({
     analysis_score_id: m.analysis_score_id,
     peer_student_id: m.peer_student_id,
@@ -663,7 +588,6 @@ export async function savePeerMatches(
   if (second.error) throw second.error
 }
 
-// Update submission with analysis results
 export async function updateSubmissionAnalysis(
   submissionId: string,
   aiScore: number,
@@ -677,11 +601,6 @@ export async function updateSubmissionAnalysis(
     .select("id")
 
   if (error) throw error
-  // An UPDATE filtered out by RLS returns 204/no-error while affecting 0 rows,
-  // which is how `submissions.analysed` silently stayed false for every
-  // analysis before migration 20260721120000. Warn rather than throw: throwing
-  // would reject the Promise.all in analysis-report-persist and abort the whole
-  // run on any deployment that hasn't applied that migration yet.
   if (!data || data.length === 0) {
     console.warn(
       `[Veridict] updateSubmissionAnalysis affected 0 rows for submission ${submissionId} — ` +
@@ -690,14 +609,6 @@ export async function updateSubmissionAnalysis(
   }
 }
 
-/**
- * Submission ids that have an `analysis_scores` row — the authoritative
- * "has been analysed" signal.
- *
- * Prefer this over `submissions.analysed`, which is unreliable: its UPDATE runs
- * under the professor's session and was silently blocked by RLS until migration
- * 20260721120000, so historical rows read false despite having been analysed.
- */
 export async function getAnalysedSubmissionIds(
   submissionIds: string[],
   supabaseClient?: SupabaseClient,
@@ -717,14 +628,12 @@ export async function getAnalysedSubmissionIds(
   )
 }
 
-// Get the latest analysis run for an assignment (newest first: created_at → ran_at → id)
 export async function getLatestAnalysisRun(
   assignmentId: string,
   supabaseClient?: SupabaseClient,
 ): Promise<AnalysisRun | null> {
   const supabase = sb(supabaseClient)
   
-  // Sortăm direct după ran_at DESC pentru a aduce mereu cea mai nouă rulare la refresh
   const { data, error } = await supabase
     .from("analysis_runs")
     .select("*")
@@ -737,7 +646,6 @@ export async function getLatestAnalysisRun(
   if (error) throw error
   return data
 }
-// Get analysis scores for a run
 export async function getAnalysisScores(
   runId: string,
   supabaseClient?: SupabaseClient,
@@ -756,7 +664,6 @@ export async function getAnalysisScores(
   }))
 }
 
-// Get analysis scores with nested peer matches for a run
 export async function getAnalysisScoresWithPeers(
   runId: string,
   supabaseClient?: SupabaseClient,
@@ -786,7 +693,6 @@ export async function getAnalysisScoresWithPeers(
   }
   if (!isMissingColumnError(first.error)) throw first.error
 
-  // Backward-compatible fallback for databases missing `fraze_elev1/fraze_elev2`.
   const second = await supabase
     .from("analysis_scores")
     .select(`
@@ -807,7 +713,6 @@ export async function getAnalysisScoresWithPeers(
   }))
 }
 
-/** Latest analysis_scores row for a submission (newest run + newest row). */
 export async function getAnalysisScoreForSubmission(
   assignmentId: string,
   submissionId: string,
@@ -836,7 +741,6 @@ export async function getAnalysisScoreForSubmission(
 
   if (error && !isMissingColumnError(error)) throw error
 
-  // Fallback when inner join on analysis_runs is unavailable in schema cache
   const run = await getLatestAnalysisRun(assignmentId, supabase)
   if (!run) return null
 
@@ -858,7 +762,6 @@ export async function getAnalysisScoreForSubmission(
   }
 }
 
-// Get peer matches for an analysis score
 export async function getPeerMatches(scoreId: string): Promise<PeerMatch[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -874,8 +777,6 @@ export async function getPeerMatches(scoreId: string): Promise<PeerMatch[]> {
   }))
 }
 
-// ─── Submission Stats ─────────────────────────────────────────────────────────
-
 export async function getSubmissionStats(assignmentId: string, classId: string): Promise<{
   submitted: number
   total: number
@@ -883,14 +784,12 @@ export async function getSubmissionStats(assignmentId: string, classId: string):
 }> {
   const supabase = createClient()
   
-  // Get total students in the class
   const { count: totalStudents } = await supabase
     .from("profiles")
     .select("*", { count: "exact", head: true })
     .eq("class_id", classId)
     .eq("role", "elev")
   
-  // Get submitted count
   const { count: submittedCount } = await supabase
     .from("submissions")
     .select("*", { count: "exact", head: true })
@@ -906,18 +805,15 @@ export async function getSubmissionStats(assignmentId: string, classId: string):
   }
 }
 
-// Get students who haven't submitted
 export async function getUnsubmittedStudents(assignmentId: string, classId: string): Promise<Profile[]> {
   const supabase = createClient()
   
-  // Get all students in the class
   const { data: students } = await supabase
     .from("profiles")
     .select("*")
     .eq("class_id", classId)
     .eq("role", "elev")
   
-  // Get students who have submitted
   const { data: submissions } = await supabase
     .from("submissions")
     .select("student_id")

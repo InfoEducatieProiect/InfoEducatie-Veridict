@@ -99,11 +99,6 @@ async function persistFreshScan(
   if (submissionUpdateError) throw submissionUpdateError
 }
 
-/**
- * POST — web plagiarism scan with DB cache on scan_sources.
- *
- * Body: { assignment_id|assignmentId, submission_id|submissionId, text?, force? }
- */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -145,7 +140,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // ── MODIFICARE AICI: Am eliminat coloana 'content' care nu exista în DB
     const { data: submission, error: subErr } = await supabase
       .from("submissions")
       .select("id, text, assignment_id")
@@ -160,7 +154,6 @@ export async function POST(request: Request) {
 
     const subRow = submission as SubmissionRow
 
-    // ── 2. Load existing cache (always, even on force — needed for replace-if-better) ──
     let existingSources: Awaited<ReturnType<typeof fetchScanSourcesForSubmission>> = []
     try {
       existingSources = await fetchScanSourcesForSubmission(supabase, submissionId)
@@ -175,7 +168,6 @@ export async function POST(request: Request) {
 
     const oldMax = maxSimilarityFromRows(existingSources)
 
-    // ── 3. Run fresh scan ────────────────────────────────────────────────────
     const bodyText = typeof body.text === "string" ? body.text.trim() : ""
     const text = bodyText || (subRow.text ?? "").trim()
 
@@ -188,7 +180,6 @@ export async function POST(request: Request) {
 
     const pythonResult = await runPlagiarismGeminiScan(text, submissionId)
 
-    // ── 4. Replace-if-better: only wipe + persist when new scan is stronger ─
     const newMax = plagiarismScorToPercent(
       Math.max(0, ...pythonResult.plagiarism_urls.map((h) => h.scor)),
     )
@@ -196,7 +187,6 @@ export async function POST(request: Request) {
     const hasNewResults = pythonResult.plagiarism_urls.length > 0 && newMax > 0
 
     if (!hasNewResults) {
-      // Scan returned nothing useful — preserve existing cache
       if (existingSources.length > 0) {
         const cachedReport = plagiarismReportFromScanSources(existingSources)
         return NextResponse.json(reportToJsonResponse(cachedReport, true))
@@ -205,7 +195,6 @@ export async function POST(request: Request) {
     }
 
     if (newMax > oldMax || existingSources.length === 0) {
-      // New scan found better results — wipe old rows and persist new batch
       try {
         await wipeScanSourcesForSubmission(supabase, submissionId)
       } catch (wipeErr) {
@@ -219,7 +208,6 @@ export async function POST(request: Request) {
       return NextResponse.json(reportToJsonResponse(pythonResult, false))
     }
 
-    // New scan is not better than cache — keep cache, return it
     const cachedReport = plagiarismReportFromScanSources(existingSources)
     return NextResponse.json(reportToJsonResponse(cachedReport, true))
   } catch (e) {

@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Web plagiarism detection — Gemini Flash grounding + hybrid similarity (Cosine & N-gram Containment).
-stdin JSON: {"text": "..."}  → stdout JSON only (diagnostics on stderr).
-"""
 from __future__ import annotations
 
 import concurrent.futures
@@ -64,16 +60,11 @@ def _curata_si_tokenizeaza(text: str) -> list[str]:
 
 
 def calculeaza_cosinus_similitudine(text_a: str, text_b: str) -> float:
-    """
-    Hybrid score: Cosine similarity + N-gram containment (bigrams, trigrams, 4-grams).
-    Cleans Wikipedia bracket annotations from text_b to avoid false negatives.
-    """
     text_b_filtrat = re.sub(r'\[[^\]]*\]', ' ', text_b)
 
     cuvinte_a = _curata_si_tokenizeaza(text_a)
     cuvinte_b = _curata_si_tokenizeaza(text_b_filtrat)
 
-    # A. Cosine similarity
     scor_cosinus = 0.0
     if cuvinte_a and cuvinte_b:
         vector_a = Counter(cuvinte_a)
@@ -85,7 +76,6 @@ def calculeaza_cosinus_similitudine(text_a: str, text_b: str) -> float:
         if magnitudine_a > 0 and magnitudine_b > 0:
             scor_cosinus = dot_product / (magnitudine_a * magnitudine_b)
 
-    # B. N-gram containment (bigrams, trigrams, 4-grams)
     scor_containment = 0.0
     if len(cuvinte_a) >= 2 and len(cuvinte_b) >= 2:
         set_b = set(cuvinte_b)
@@ -128,7 +118,6 @@ _GENAI_CLIENT: Any = None
 
 
 def _get_genai_client(key: str) -> Any:
-    """Single genai.Client per process — reused across grounded + fallback calls."""
     global _GENAI_CLIENT
     if _GENAI_CLIENT is None:
         _GENAI_CLIENT = genai.Client(api_key=key)
@@ -190,11 +179,6 @@ def _is_login_wall(url: str) -> bool:
 
 
 def _resolve_redirect_url(url: str) -> str:
-    """
-    For wrapped/proxy URLs (Vertex grounding, google.com/url, etc.) do a HEAD
-    request to discover the real destination. Falls back to a streamed GET if
-    HEAD is rejected. Returns the resolved URL or the original on failure.
-    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept-Language": "ro-RO,ro;q=0.9,en;q=0.8",
@@ -237,10 +221,6 @@ def _needs_resolution(url: str) -> bool:
 
 
 def _resolve_targets_parallel(raw_targets: list[str]) -> list[str]:
-    """
-    Pre-resolve any Vertex/proxy URLs via HEAD. Dedupes by resolved URL.
-    Returns cleaned, unique real target URLs.
-    """
     needs_resolve = [u for u in raw_targets if _needs_resolution(u)]
     direct = [u for u in raw_targets if not _needs_resolution(u)]
 
@@ -361,10 +341,6 @@ def _fallback_gemini_fara_grounding(client: Any, text_suspect: str) -> list[str]
 
 
 def _alege_fragment_distinctiv(text: str) -> str:
-    """
-    Pick the single most distinctive sentence for a focused grounding snippet query.
-    Heuristic: prefer long sentences with the most low-frequency words.
-    """
     propozituri = re.split(r'(?<=[.!?])\s+', text.strip())
     propozituri = [p.strip() for p in propozituri if len(p.strip()) > 40]
     if not propozituri:
@@ -377,7 +353,6 @@ def _alege_fragment_distinctiv(text: str) -> str:
         cuvinte = _curata_si_tokenizeaza(prop)
         if not cuvinte:
             return 0.0
-        # Sum of inverse frequencies → high score = rare words
         return sum(1.0 / frecventa.get(c, 1) for c in cuvinte) / len(cuvinte) * len(cuvinte) ** 0.5
 
     return max(propozituri, key=raritate)
@@ -413,7 +388,6 @@ def gaseste_surse_cu_gemini_search(text_suspect: str) -> list[str]:
 
         linkuri = _extrage_din_raspuns_complet(raspuns)
 
-        # For long texts, send a second grounded query with the most distinctive snippet
         if len(text_trim) > _SNIPPET_CHAR_THRESHOLD:
             fragment = _alege_fragment_distinctiv(text_trim)
             _log(f"Snippet query: \"{fragment[:80]}…\"")
@@ -474,7 +448,6 @@ def _descarca_si_curata_pagina(url: str) -> tuple[str, str]:
 
     resp, url_rezolvat = _fetch(url_start)
 
-    # Retry once on timeout/connection error
     if resp is None:
         _log(f"Retrying download: {url_start[:80]}")
         resp, url_rezolvat = _fetch(url_start)
@@ -508,7 +481,6 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
             "grounding_ok": False,
         }
 
-    # Pre-resolve Vertex/proxy URLs to real destinations before downloading
     raw_targets: list[str] = []
     for raw_u in surse_web[:_MAX_PARALLEL_SOURCES * 2]:
         clean_u = _curata_si_extrage_url_real(raw_u)
@@ -550,7 +522,6 @@ def ruleaza_verificare_plagiat_globala(text_elev: str) -> dict[str, Any]:
 
             scor = calculeaza_cosinus_similitudine(text_elev, text_extern)
 
-            # Authority boost: Wikipedia strong matches rank above clones (Prezi/Scribd)
             scor_clasare = scor
             if "wikipedia.org" in url_display.lower() and scor >= 0.55:
                 scor_clasare = min(1.0, scor + 0.06)

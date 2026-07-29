@@ -16,7 +16,6 @@ interface AssignmentListProps {
 
 export default function AssignmentList({ assignments, classes, onSelect, onNew, onBrowse }: AssignmentListProps) {
   const { t, dateLocale } = useLanguage()
-  // Filter can be "ALL", a type filter ("test"/"tema"), or a class code.
   const [filterClass, setFilterClass] = useState<string>("ALL")
   const classOptions = classes.map((c) => c.code)
   const typeOptions = ["test", "tema"] as const
@@ -25,7 +24,6 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew, 
     filterClass === "ALL"
       ? assignments
       : isTypeFilter
-        // Legacy rows without a `type` are treated as homework ("tema").
         ? assignments.filter((a) => (a.type ?? "tema") === filterClass)
         : assignments.filter((a) => a.class_code === filterClass)
 
@@ -88,7 +86,6 @@ export default function AssignmentList({ assignments, classes, onSelect, onNew, 
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {(() => {
-                    // Legacy rows without a `type` are treated as homework ("tema").
                     const isTest = a.type === "test"
                     const tint = isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)"
                     const fg = isTest ? "#8b5cf6" : "var(--dash-accent)"

@@ -1,6 +1,3 @@
-/**
- * Normalizes analysis_scores / report score objects that may use camelCase or snake_case.
- */
 export interface ForensicScoreRef {
   id?: string
   analysisScoreId?: string

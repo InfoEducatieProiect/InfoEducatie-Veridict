@@ -8,21 +8,10 @@ import {
 import { persistAnalysisReport } from "@/lib/analysis-report-persist"
 import { getSubmittedSubmissionsForAssignment } from "@/lib/supabase/queries"
 
-// Long-running, streamed, spawns Python — must run dynamically on the Node runtime
-// and never be cached/optimized (so progress chunks flush live).
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-/**
- * Hybrid AI analysis (scripts/ai_detector.py) + inter-student similarity + batched
- * spaCy stylometry, persisted to analysis_scores.
- *
- * Streams NDJSON: one `{type:"progress",done,total}` per submission as the Python
- * detector runs, then a final `{type:"report",report}` (or `{type:"error",error}`).
- * Auth/validation failures still return plain JSON with the proper status code
- * (they happen before streaming begins).
- */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -88,8 +77,6 @@ export async function POST(request: Request) {
 
     const submissions = mapDocumentsToSubmissionInputs(documents)
 
-    // Stream progress as NDJSON. Validation above already returned JSON errors;
-    // from here the response is a 200 stream.
     const encoder = new TextEncoder()
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {

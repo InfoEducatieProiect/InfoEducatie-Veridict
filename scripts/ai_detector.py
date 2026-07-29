@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-Veridict hybrid AI detection v2 — Three-Signal Ensemble.
-Signals: RoBERTa (yaya36095) + Romanian BERT pseudo-perplexity + structural stylometry.
-Bilingual: Romanian and English.
-Parity: lib/hybrid-ai-detection.ts (structural signals only — no perplexity in TS fallback).
-"""
 from __future__ import annotations
 
 import json
@@ -24,15 +18,11 @@ except ImportError:
     _LANGDETECT_DISPONIBIL = False
     _langdetect = None  # type: ignore
 
-# ==========================================
-# CONSTANTS
-# ==========================================
 
 _LIMBI_SLABE_ROBERTA = {"ro", "hu", "pl", "cs", "sk", "bg", "hr", "uk", "ru", "tr"}
 _detector: Pipeline | None = None
 _LABEL_AI: str = "Fake"
 
-# Romanian AI-text fingerprints (word-boundary matched — avoids substring false matches)
 _AMPRENTE_RO = [
     "una dintre cele mai",
     "are puterea de a",
@@ -53,7 +43,6 @@ _AMPRENTE_RO = [
     "punand accent pe",
     "fara indoiala",
     "un rol crucial",
-    # additional high-confidence AI phrases
     "este important sa",
     "joaca un rol",
     "in ziua de astazi",
@@ -88,10 +77,6 @@ _AMPRENTE_EN = [
 _DIACRITICE = {"ă": "a", "â": "a", "î": "i", "ș": "s", "ț": "t"}
 
 
-# ==========================================
-# LANGUAGE DETECTION
-# ==========================================
-
 def _detecteaza_limba(text: str) -> str:
     if _LANGDETECT_DISPONIBIL and _langdetect is not None:
         try:
@@ -115,11 +100,6 @@ def _detecteaza_limba_heuristica(text: str) -> str:
     return "ro"
 
 
-# ==========================================
-# STRUCTURAL SIGNAL (SIGNAL S)
-# No baseline — only earned evidence accumulates.
-# ==========================================
-
 def calculeaza_burstiness_nativ(text: str) -> float:
     propozitii = re.split(r"[.!?]+", text)
     lungimi = [len(p.split()) for p in propozitii if len(p.strip()) > 2]
@@ -136,12 +116,10 @@ def _normalizeaza_text(text: str) -> str:
 
 
 def analizeaza_amprente_bilingve_agnostice(text: str, limba: str) -> int:
-    """Word-boundary-aware fingerprint matching (fixes substring false positives)."""
     t = _normalizeaza_text(text)
     dictionar = _AMPRENTE_EN if limba == "en" else _AMPRENTE_RO
     count = 0
     for fraza in dictionar:
-        # Escape regex special chars; \b anchors to word boundaries
         pattern = r"\b" + re.escape(fraza) + r"\b"
         if re.search(pattern, t):
             count += 1
@@ -154,34 +132,23 @@ def calculeaza_scor_structura(
     numar_cuvinte: int,
     text: str,
 ) -> float:
-    """
-    Evidence-additive structural score (0-100). No baseline anchor.
-    AI signatures add to score; human signatures subtract.
-    """
     s = 0.0
 
-    # 1. Fingerprints — log-scaled diminishing returns (no hard density cap;
-    #    log1p already handles it gracefully)
     s += min(40.0, math.log1p(amprente) * 16.0)
 
-    # 2. Burstiness — continuous, no dead zones
-    # Low burst (monotone) → AI. High burst (chaotic) → human.
-    # Contribution: −15 (very varied) to +25 (very flat).
     s_burst = max(-15.0, min(25.0, (5.0 - burst) * 7.0))
     s += s_burst
 
-    # 3. Type-Token Ratio — AI tends toward moderate uniformity
     words = text.lower().split()
     if len(words) >= 10:
         ttr = len(set(words)) / len(words)
         if ttr < 0.40:
-            s += 15.0     # very repetitive → AI
+            s += 15.0
         elif ttr < 0.55:
             s += 7.0
         elif ttr > 0.70:
-            s -= 8.0      # rich vocabulary → human
+            s -= 8.0
 
-    # 4. Punctuation diversity — AI rarely uses em-dashes, semicolons, parentheses
     punct_varied = set(c for c in text if c in "—–;:()[]\"'!?")
     if len(punct_varied) <= 1:
         s += 8.0
@@ -190,10 +157,6 @@ def calculeaza_scor_structura(
 
     return max(0.0, min(99.4, round(s, 1)))
 
-
-# ==========================================
-# ROBERTA SIGNAL (SIGNAL R)
-# ==========================================
 
 def _calibreaza_etichete(detector: Pipeline) -> None:
     global _LABEL_AI
@@ -244,12 +207,7 @@ def analizeaza_cu_roberta(text: str) -> dict[str, Any]:
     }
 
 
-# ==========================================
-# PERPLEXITY SIGNAL (SIGNAL P, Romanian only)
-# ==========================================
-
 def _get_perplexitate_ro(text: str, limba: str) -> Optional[float]:
-    """Returns 0-100 perplexity score for Romanian text, None for English or on failure."""
     if limba != "ro":
         return None
     try:
@@ -258,7 +216,6 @@ def _get_perplexitate_ro(text: str, limba: str) -> Optional[float]:
         return result.get("scor_perplexitate")
     except Exception:
         try:
-            # Fallback: try relative import when running as subprocess
             import sys
             import os
             sys.path.insert(0, os.path.dirname(__file__))
@@ -270,7 +227,6 @@ def _get_perplexitate_ro(text: str, limba: str) -> Optional[float]:
 
 
 def _get_perplexitate_ro_full(text: str, limba: str) -> dict[str, Any]:
-    """Returns full perplexity dict with all fields."""
     if limba != "ro":
         return {"mean_surprisal": None, "stddev_surprisal": None, "scor_perplexitate": None}
     try:
@@ -283,10 +239,6 @@ def _get_perplexitate_ro_full(text: str, limba: str) -> dict[str, Any]:
         return {"mean_surprisal": None, "stddev_surprisal": None, "scor_perplexitate": None, "eroare": str(exc)}
 
 
-# ==========================================
-# THREE-SIGNAL FUSION
-# ==========================================
-
 def _ensemble_fusion_v2(
     R: float,
     P: Optional[float],
@@ -297,37 +249,22 @@ def _ensemble_fusion_v2(
     numar_cuvinte: int,
     limba: str,
 ) -> tuple[float, float, Optional[float], float, float, Optional[float], float, bool, bool]:
-    """
-    Returns (scor_combinat, R_adj, P_adj, S, w_r, w_p, w_s, scut_artistic, scut_enciclopedic).
-    P=None means the perplexity signal is absent (English text or disabled).
-
-    Language-adaptive weights:
-    - Romanian: yaya36095 scores ≈99-100% on almost all RO text regardless of origin,
-      so R is nearly non-discriminating. P (BERT-RO perplexity) and S dominate.
-    - English: yaya36095 was trained mostly on EN and discriminates well. R dominates.
-    """
     R_adj = R
     P_adj = P
     scut_artistic = False
     scut_enciclopedic = False
 
-    # --- Language-adaptive base weights ---
     if limba == "ro":
         if P is not None:
-            # Three-signal Romanian path (optimal)
             w_r, w_p, w_s = 0.15, 0.55, 0.30
         else:
-            # Perplexity unavailable — lean heavily on structural signal
             w_r, w_p, w_s = 0.20, None, 0.80
     else:
-        # English path — R is reliable; no perplexity
         if R >= 80:
             w_r, w_p, w_s = 0.80, None, 0.20
         else:
             w_r, w_p, w_s = 0.65, None, 0.35
 
-    # --- Shields: additional protection for clearly-human structural patterns ---
-    # Fire when BOTH LLM signals are uncertain (P low, R not overwhelmingly high for EN)
     llm_uncertain = (P is None or P < 50) and (limba != "en" or R < 80)
     if llm_uncertain:
         scut_artistic = burst > 7.0 and densitate < 0.5
@@ -341,18 +278,15 @@ def _ensemble_fusion_v2(
         else:
             w_r, w_p, w_s = 0.10, None, 0.90
 
-    # --- Low-signal cap for Romanian: structural + P both indicate human ---
     if limba == "ro" and amprente <= 1 and (P is None or P <= 30):
         cap = max((P_adj or 0.0), S * 0.5) + 15.0
         raw = _compute_weighted(R_adj, P_adj, S, w_r, w_p, w_s)
         scor = max(0.0, min(99.4, min(cap, raw)))
         return scor, R_adj, P_adj, S, w_r, w_p, w_s, scut_artistic, scut_enciclopedic
 
-    # --- Standard weighted sum ---
     scor = _compute_weighted(R_adj, P_adj, S, w_r, w_p, w_s)
     scor = min(99.4, max(0.0, round(scor, 1)))
 
-    # Floor: only for English where R is genuinely discriminating
     if limba == "en" and R >= 80:
         scor = min(99.4, max(scor, min(R, 92.0)))
 
@@ -371,10 +305,6 @@ def _compute_weighted(
         return round(R * w_r + P * w_p + S * w_s, 1)
     return round(R * w_r + S * w_s, 1)
 
-
-# ==========================================
-# MAIN ANALYSIS FUNCTION
-# ==========================================
 
 def analizeaza_text_complet(text: str, include_heuristic: bool = True) -> dict[str, Any]:
     limba_detectata = _detecteaza_limba(text)
@@ -404,7 +334,6 @@ def analizeaza_text_complet(text: str, include_heuristic: bool = True) -> dict[s
             "perplexitate_stddev": None,
         }
 
-    # --- Compute all three signals ---
     amprente = analizeaza_amprente_bilingve_agnostice(text, limba_iso)
     burst = calculeaza_burstiness_nativ(text)
     densitate_amprente = round((amprente / numar_cuvinte) * 100, 2)
@@ -425,7 +354,6 @@ def analizeaza_text_complet(text: str, include_heuristic: bool = True) -> dict[s
         scut_enciclopedic,
     ) = _ensemble_fusion_v2(R_brut, P, S, burst, amprente, densitate_amprente, numar_cuvinte, limba_iso)
 
-    # greutate_heuristic is the combined non-RoBERTa weight for the TS mirror
     greutate_heuristic = round((w_p or 0.0) + w_s, 2) if w_p is not None else w_s
 
     return {
@@ -456,10 +384,6 @@ def analizeaza_text_complet_finetuned(text: str) -> dict[str, Any]:
     return analizeaza_text_complet(text)
 
 
-# ==========================================
-# STDIN/STDOUT JSON PROTOCOL (subprocess entry point)
-# ==========================================
-
 def main() -> None:
     try:
         payload = json.load(sys.stdin)
@@ -473,8 +397,6 @@ def main() -> None:
         sys.exit(1)
 
     total = len(texts)
-    # Progress goes to STDERR (stdout is reserved for the final JSON) so the TS
-    # wrapper can surface a real per-student counter. Format: "[progress] done/total".
     print(f"[progress] 0/{total}", file=sys.stderr, flush=True)
 
     results: list[dict[str, Any]] = []

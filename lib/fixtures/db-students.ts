@@ -1,7 +1,6 @@
 import type { DbStudent } from "../types/db-types"
 import type { SchoolClass } from "../types/academic-types"
 
-// Exactly 31 students. st_30 and st_31 have NO submission entry.
 export const DB_STUDENTS: DbStudent[] = [
   { id: "st_1",  name: "Popescu Andrei" },
   { id: "st_2",  name: "Ionescu Maria" },
@@ -32,8 +31,8 @@ export const DB_STUDENTS: DbStudent[] = [
   { id: "st_27", name: "Luca Ștefan" },
   { id: "st_28", name: "Gheorghe Carmen" },
   { id: "st_29", name: "Pavel Marius" },
-  { id: "st_30", name: "Badea Raluca" },   // NO submission — unsubmitted
-  { id: "st_31", name: "Miron Costin" },   // NO submission — unsubmitted
+  { id: "st_30", name: "Badea Raluca" },
+  { id: "st_31", name: "Miron Costin" },
 ]
 
 export const DB_ASSIGNMENTS = [

@@ -19,7 +19,6 @@ export type StylometryScanFailure = {
 
 export type StylometryScanResult = StylometryScanSuccess | StylometryScanFailure
 
-/** Calls `/api/analyze-stilometrie` — persists metrics to `analysis_scores` on the server. */
 export async function fetchStylometryScan(params: {
   assignmentId: string
   submissionId: string

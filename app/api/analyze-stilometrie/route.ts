@@ -16,17 +16,6 @@ function readStringField(
   return trimmed.length > 0 ? trimmed : undefined
 }
 
-/**
- * POST — spaCy stylometric analysis for one submission.
- *
- * Body: {
- *   assignment_id|assignmentId,
- *   analysis_score_id|analysisScoreId,
- *   student_id|studentId,
- *   submission_id|submissionId,
- *   text?
- * }
- */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -67,7 +56,6 @@ export async function POST(request: Request) {
         .select("id, professor_id, type")
         .eq("id", assignmentId)
         .maybeSingle()
-      // Backward-compat: retry without `type` if the column hasn't been migrated yet.
       if (res.error && (res.error.code === "42703" || res.error.code === "PGRST204")) {
         res = await supabase
           .from("assignments")
@@ -148,13 +136,10 @@ export async function POST(request: Request) {
     )
 
     return NextResponse.json({
-      /** Lucrarea curentă → `analysis_scores` */
       metrics: result.metrics,
       deviation: result.deviation,
-      /** Amprenta istorică → `student_baselines` (strict read-only la analiză) */
       historic_baseline: result.historic_baseline,
       baseline_used: result.baseline_used,
-      /** true = lipsă rând în `student_baselines`; nu implică scriere în DB */
       baseline_initialized: result.baseline_initialized,
       verdict: result.verdict,
       analysis_score_id: result.analysis_score_id,

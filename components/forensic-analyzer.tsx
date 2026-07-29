@@ -14,14 +14,12 @@ import WebScannerPanel from "./forensic/WebScannerPanel"
 import GlobalIntegrityGraph from "./forensic/GlobalIntegrityGraph"
 import { cachedScoreToUi } from "@/lib/plagiarism-formatters"
 
-// Re-export types consumed by dashboard-profesor.tsx
 export type { SursaWeb, RaportPlagiatWeb } from "@/lib/plagiarism-formatters"
 
 interface ForensicAnalyzerProps {
   studentName: string
   score: StudentScore
   onBack: () => void
-  /** Overrides the default "back to table" wording when opened from elsewhere. */
   backLabel?: string
   assignmentId: string
   submissionId: string
@@ -38,9 +36,7 @@ interface ForensicAnalyzerProps {
   }) => void
   analysisScoreId: string
   studentId: string
-  /** Tab to open on mount (from the ?tab URL param); falls back to "graph". */
   initialTab?: string
-  /** Fired when the user switches tabs, so the URL can be kept in sync. */
   onTabChange?: (tab: TabId) => void
 }
 

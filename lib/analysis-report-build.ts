@@ -12,7 +12,6 @@ import { runHybridAiBatch, type AiProgressCallback } from "./hybrid-ai-python"
 import type { StudentBaseline } from "@/lib/supabase/queries"
 import type { AnalysisReport, StudentScore, SubmissionInput } from "./analysis-report"
 
-/** Report + reusable similarity intermediates, so persist doesn't recompute the O(n²) pass. */
 export interface BuiltAnalysis {
   report: AnalysisReport
   cazuri: CazSuspect[]
@@ -64,7 +63,6 @@ function buildGraphEdges(
   return listed
 }
 
-/** Hybrid AI + peer/stylometric report (server-only, before INSERT). */
 export async function buildAnalysisReport(
   assignmentId: string,
   submissions: SubmissionInput[],

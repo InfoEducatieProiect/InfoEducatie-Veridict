@@ -35,7 +35,6 @@ export interface RadarStilometricTabProps {
   initialBaseline?: StylometryMetrics | null
   initialDeviation?: number | null
   initialVerdict?: StylometryVerdict | null
-  /** When true, runs spaCy scan on mount if metrics are not already loaded. */
   autoRunOnMount?: boolean
   onAnalysisComplete?: (payload: {
     metrics: StylometryMetrics

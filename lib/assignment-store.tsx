@@ -1,6 +1,5 @@
 "use client"
 
-// Barrel re-export — all consumers continue to import from this path unchanged.
 export * from "./types/academic-types"
 export * from "./types/db-types"
 export * from "./fixtures/db-students"

@@ -1,12 +1,5 @@
 import { calculateCosineSimilarity } from "./similarity"
 
-/**
- * Implements the adaptive-threshold algorithm:
- *
- * - globalCosine >= 50 → strict mode: sentence Jaccard threshold = 0.25
- * - globalCosine 30–49 → dynamic fallback: threshold = 0.12 + word/bigram overlap
- * - below 30 → returns empty (no highlighting)
- */
 export function getSimilarPhrases(
   text1: string,
   text2: string,
@@ -102,13 +95,6 @@ export function getSimilarPhrases(
   return suspicious
 }
 
-/**
- * Locate character-level [{start, end, severity}] spans for highlighting.
- *
- * severity "yellow" → paraphrased (30–50% global cosine)
- * severity "orange" → similar (50–65%)
- * severity "red"    → near-identical (>65%)
- */
 export function spansFromSentences(
   text: string,
   sentences: string[],
@@ -123,7 +109,6 @@ export function spansFromSentences(
       const m = regex.exec(text)
       if (m) spans.push({ start: m.index, end: m.index + m[0].length, severity })
     } catch {
-      // Skip sentences with regex-breaking characters
     }
   }
   return spans.sort((a, b) => a.start - b.start)

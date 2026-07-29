@@ -1,13 +1,6 @@
 import type { HistoricBaseline } from "../types/db-types"
 import type { StylometricVector } from "./stylometry"
 
-/**
- * Heuristic AI-probability score based on:
- * - very high TTR (AI uses varied vocabulary)
- * - very long average sentences
- * - very low punctuation density
- * - presence of academic meta-discourse markers
- */
 export function estimateAiScore(text: string, vec: StylometricVector): number {
   const AI_MARKERS = [
     "în concluzie", "de asemenea", "în acest sens", "este important să",
@@ -29,7 +22,6 @@ export function estimateAiScore(text: string, vec: StylometricVector): number {
   return Math.min(98, score)
 }
 
-/** Convertește baseline din `student_baselines` la scala 0–100 a graficului. */
 export function historicVectorFromBaseline(baseline: HistoricBaseline): StylometricVector {
   return {
     lexicalDiversity: Math.min(100, Math.round(baseline.ttr * 1.1)),
@@ -40,7 +32,6 @@ export function historicVectorFromBaseline(baseline: HistoricBaseline): Stylomet
   }
 }
 
-/** Profil sintetic determinist când lipsește baseline în DB. */
 export function syntheticHistoricProfile(studentName: string): StylometricVector {
   let h = 0
   for (let i = 0; i < studentName.length; i++) h = (h * 31 + studentName.charCodeAt(i)) >>> 0
@@ -56,9 +47,6 @@ export function syntheticHistoricProfile(studentName: string): StylometricVector
   }
 }
 
-/**
- * Profil istoric: baseline din DB dacă există, altfel profil sintetic determinist din nume.
- */
 export function resolveHistoricProfile(
   studentName: string,
   dbBaseline?: HistoricBaseline | null

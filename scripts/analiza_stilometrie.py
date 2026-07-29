@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""
-Stylometric fingerprint via spaCy (ro_core_news_sm).
-
-Two stdin modes (stdout JSON only):
-  - Single:  {"text": "...", "baseline": {...}|null}
-             → {"metrics", "deviation", "baseline_used"}
-  - Batch:   {"texts": [{"id","text","baseline"}, ...]}
-             → {"results": [{"id","metrics","deviation","baseline_used"}, ...]}
-
-Batch mode loads the spaCy model ONCE and streams all texts through
-`nlp.pipe`, so a whole class is analysed in a single process instead of
-one spawn (and one model reload) per student.
-"""
 from __future__ import annotations
 
 import json
@@ -107,7 +94,6 @@ def calculeaza_deviatie_manhattan_normalizata(
 
 
 def extrage_amprenta_stilometrica_procentuala(text: str) -> dict[str, float]:
-    """Amprenta pentru un singur text (modul single)."""
     return _metrics_from_doc(nlp(text))
 
 
@@ -115,7 +101,6 @@ def _baseline_dict_sau_curent(
     baseline: object,
     curent: dict[str, float],
 ) -> dict[str, float]:
-    """Normalizează amprenta istorică; cade pe amprenta curentă dacă lipsește."""
     if isinstance(baseline, dict) and any(
         baseline.get(k) is not None for k in ("ttr", "asl", "verbs", "adjs", "punct")
     ):
@@ -143,8 +128,7 @@ def _rezultat_din_metrics(
 
 
 def _proceseaza_batch(items: list) -> None:
-    """O singură încărcare spaCy + nlp.pipe peste toată clasa."""
-    valide: list[tuple[str, str, object]] = []  # (id, text_curat, baseline)
+    valide: list[tuple[str, str, object]] = []
     rezultate: list[dict] = []
 
     for item in items:

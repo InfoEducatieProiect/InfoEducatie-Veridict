@@ -14,8 +14,6 @@ import { createClient } from "@/lib/supabase/client"
 import { signOut } from "@/app/actions/auth"
 import { useLanguage } from "@/lib/i18n/language-provider"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface Assignment {
   id: string
   title: string
@@ -49,19 +47,12 @@ type WorkspaceState =
   | { phase: "upload" }
   | { phase: "posted"; fileName: string; previewContent: string; isHtml: boolean }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-// CRITICAL DATA PRIVACY: The student interface must have NO AI metrics,
-// NO percentages, NO graphs, and NO alerts.
-// The status can only say "Trimis" or "In Evaluare".
-
 const ACCEPTED_EXTENSIONS = [".txt", ".docx"]
 const ACCEPTED_MIME = [
   "text/plain",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]
-const MAX_SIZE_BYTES = 20 * 1024 * 1024 // 20 MB
-
-// ─── Data Fetchers ────────────────────────────────────────────────────────────
+const MAX_SIZE_BYTES = 20 * 1024 * 1024
 
 async function fetchAssignments(classId: string): Promise<Assignment[]> {
   const supabase = createClient()
@@ -94,8 +85,6 @@ async function fetchSubmissions(studentId: string): Promise<Submission[]> {
   })) as Submission[]
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -109,8 +98,6 @@ function validateFile(file: File): boolean {
   if (file.size > MAX_SIZE_BYTES) return true
   return false
 }
-
-// ─── Toast notification ───────────────────────────────────────────────────────
 
 function ErrorToast({ message, onClose, closeLabel }: { message: string; onClose: () => void; closeLabel: string }) {
   return (
@@ -133,8 +120,6 @@ function ErrorToast({ message, onClose, closeLabel }: { message: string; onClose
     </AnimatePresence>
   )
 }
-
-// ─── Upload Workspace ─────────────────────────────────────────────────────────
 
 function UploadWorkspace({
   assignment,
@@ -401,8 +386,6 @@ function UploadWorkspace({
   )
 }
 
-// ─── Post-Submission Preview ──────────────────────────────────────────────────
-
 function SubmissionPreview({
   assignment,
   fileName,
@@ -477,8 +460,6 @@ function SubmissionPreview({
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 interface DashboardElevProps {
   userId: string
   displayName: string
@@ -499,15 +480,11 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
     { revalidateOnFocus: false }
   )
 
-  // URL is the source of truth: ?a=<assignmentId> opens the upload workspace.
-  // The "posted" success preview stays ephemeral (in-memory parsed file) and is
-  // intentionally not deep-linkable.
   const aParam = searchParams.get("a")
   const activeAssignment = useMemo(
     () => assignments.find((a) => a.id === aParam) ?? null,
     [assignments, aParam],
   )
-  // When the assignment leaves the URL (Back / handleBack), drop any workspace state.
   useEffect(() => {
     if (!aParam) setWorkspace(null)
   }, [aParam])
@@ -620,7 +597,6 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
               <motion.div key="main" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
                 transition={{ duration: 0.25 }} className="flex flex-col gap-12">
 
-                {/* Teme de Predat */}
                 <section>
                   <div className="mb-5">
                     <h1 className="text-2xl font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardElev.assignmentsTitle")}</h1>
@@ -705,7 +681,6 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                   )}
                 </section>
 
-                {/* Istoric Predari */}
                 <section>
                   <div className="mb-5">
                     <h2 className="text-xl font-bold" style={{ color: "var(--dash-fg)" }}>{t("dashboardElev.historyTitle")}</h2>
@@ -765,7 +740,6 @@ export default function DashboardElev({ userId, displayName, classCode, classId 
                                   })}
                                 </td>
                                 <td className="px-5 py-3.5">
-                                  {/* CRITICAL DATA PRIVACY: Only statusSent or statusPending */}
                                   {s.analysed ? (
                                     <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap">
                                       <CheckCircle2 size={11} aria-hidden="true" />{t("dashboardElev.statusSent")}

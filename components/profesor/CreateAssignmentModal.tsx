@@ -42,10 +42,8 @@ export default function CreateAssignmentModal({ onClose, onSave }: CreateAssignm
     const PANEL_H = 380, PANEL_W = 380, GAP = 8
     const rect = calendarBtnRef.current.getBoundingClientRect()
     const spaceBelow = window.innerHeight - rect.bottom
-    // Flip upward when there isn't room below and there is more room above.
     const openUp = spaceBelow < PANEL_H && rect.top > spaceBelow
     const top = openUp ? Math.max(GAP, rect.top - PANEL_H - GAP) : rect.bottom + GAP
-    // Clamp horizontally so the wide panel stays on-screen.
     const left = Math.max(GAP, Math.min(rect.left, window.innerWidth - PANEL_W - GAP))
     setCalendarPos({ top, left, width: rect.width, openUp })
   }, [])

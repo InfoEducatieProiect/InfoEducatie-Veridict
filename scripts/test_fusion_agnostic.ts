@@ -1,7 +1,3 @@
-/**
- * Decoupled ensemble matrix regression checks (TS parity).
- * Run: npx tsx scripts/test_fusion_agnostic.ts
- */
 import { analizeazaTextComplet } from "../lib/hybrid-ai-detection"
 
 function assert(cond: boolean, msg: string) {

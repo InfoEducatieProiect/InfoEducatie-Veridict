@@ -9,15 +9,12 @@ import type { ProfessorStudentSubmission } from "@/lib/supabase/queries"
 
 interface StudentSubmissionsListProps {
   submissions: ProfessorStudentSubmission[]
-  /** Submission ids with an `analysis_scores` row — see getAnalysedSubmissionIds. */
   analysedIds: Set<string>
   isLoading: boolean
-  /** Id of the submission whose assignment is currently being analysed, if any. */
   runningSubmissionId: string | null
   progress: { done: number; total: number } | null
   error: string | null
   onDismissError: () => void
-  /** `isAnalysed` is passed through so the caller branches on the same signal. */
   onAction: (row: ProfessorStudentSubmission, isAnalysed: boolean) => void
 }
 
@@ -72,8 +69,6 @@ export default function StudentSubmissionsList({
       </AnimatePresence>
 
       <div className="relative overflow-hidden rounded-2xl border shadow-sm" style={{ background: "var(--dash-card)", borderColor: "var(--dash-border)" }}>
-        {/* Determinate overlay — the run starts immediately, so this reflects real
-            progress rather than the scripted AiAnalysisOverlay timeline. */}
         {runningSubmissionId && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/75 dark:bg-slate-900/75 backdrop-blur-sm"
             role="status" aria-live="polite">
@@ -120,7 +115,6 @@ export default function StudentSubmissionsList({
           <tbody>
             <AnimatePresence initial={false}>
               {submissions.map((s, idx) => {
-                // Legacy rows without a `type` are treated as homework ("tema").
                 const isTest = s.assignment_type === "test"
                 const tint = isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)"
                 const fg = isTest ? "#8b5cf6" : "var(--dash-accent)"
@@ -129,8 +123,6 @@ export default function StudentSubmissionsList({
                   !!s.assignment_deadline &&
                   new Date(s.submitted_at).getTime() > new Date(s.assignment_deadline).getTime()
                 const isRunning = runningSubmissionId === s.id
-                // analysis_scores is authoritative; the flag is a fallback for
-                // once migration 20260721120000 makes it truthful again.
                 const isAnalysed = analysedIds.has(s.id) || s.analysed
 
                 return (

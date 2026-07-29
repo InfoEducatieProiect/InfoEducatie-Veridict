@@ -1,9 +1,3 @@
-/**
- * TypeScript mirror of scripts/ai_detector.py structural logic.
- * NOTE: This is the in-process fallback used when the Python subprocess fails.
- * It omits the BERT-RO perplexity signal (P), so scores are degraded —
- * source: "typescript_fallback" signals this to callers.
- */
 
 export const LIMBI_SLABE_ROBERTA = new Set([
   "ro",
@@ -18,7 +12,6 @@ export const LIMBI_SLABE_ROBERTA = new Set([
   "tr",
 ])
 
-// Romanian AI-text fingerprints — matches scripts/ai_detector.py _AMPRENTE_RO
 export const AMPRENTE_RO = [
   "una dintre cele mai",
   "are puterea de a",
@@ -48,7 +41,6 @@ export const AMPRENTE_RO = [
   "in acest sens",
 ]
 
-// English AI-text fingerprints — matches scripts/ai_detector.py _AMPRENTE_EN
 export const AMPRENTE_EN = [
   "one of the most",
   "provides people with",
@@ -94,7 +86,6 @@ export interface HybridAiResult {
   limba_slaba_pentru_roberta?: boolean
   scut_artistic_activ?: boolean
   scut_enciclopedic_activ?: boolean
-  // Perplexity fields — only populated from Python path (P=None in TS fallback)
   scor_perplexitate?: number | null
   perplexitate_medie?: number | null
   perplexitate_stddev?: number | null
@@ -144,7 +135,6 @@ export function analizeazaAmprenteBilingveAgnostice(
     textLucru = textLucru.split(car).join(rep)
   }
   const dictionar = limba === "en" ? AMPRENTE_EN : AMPRENTE_RO
-  // Word-boundary match — avoids "pentru ca" matching inside "pentru calitate"
   return dictionar.filter((fraza) =>
     new RegExp("\\b" + escapeRegex(fraza) + "\\b").test(textLucru),
   ).length
@@ -158,14 +148,11 @@ export function calculeazaScorStructura(
 ): number {
   let s = 0.0
 
-  // 1. Fingerprints — log-scaled diminishing returns (no hard density cap)
   s += Math.min(40.0, Math.log1p(amprente) * 16.0)
 
-  // 2. Burstiness — continuous, no dead zones (−15 to +25)
   const sBurst = Math.max(-15.0, Math.min(25.0, (5.0 - burst) * 7.0))
   s += sBurst
 
-  // 3. TTR — AI favors moderate uniformity, human text is richer
   const words = text.toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length >= 10) {
     const ttr = new Set(words).size / words.length
@@ -174,7 +161,6 @@ export function calculeazaScorStructura(
     else if (ttr > 0.7) s -= 8.0
   }
 
-  // 4. Punctuation diversity — AI rarely uses varied punctuation
   const punctVaried = new Set(
     [...text].filter((c) => "—–;:()[]\"'!?".includes(c)),
   ).size
@@ -201,8 +187,6 @@ export function ensembleFusion(
   scutArtisticActiv: boolean
   scutEnciclopedicActiv: boolean
 } {
-  // TS fallback: no perplexity signal (P=None path from Python).
-  // Language-adaptive weights — mirrors _ensemble_fusion_v2 in ai_detector.py.
   let R_adj = R
   let w_r: number
   let w_s: number
@@ -210,17 +194,13 @@ export function ensembleFusion(
   let scutEnciclopedic = false
 
   if (limba === "ro") {
-    // yaya36095 returns ≈99-100% for all Romanian text → not discriminating.
-    // Lean heavily on structural signal.
     w_r = 0.20
     w_s = 0.80
   } else {
-    // English: yaya36095 is reliable
     w_r = R >= 80 ? 0.80 : 0.65
     w_s = R >= 80 ? 0.20 : 0.35
   }
 
-  // Shields
   if (limba !== "en" || R < 80) {
     scutArtistic = burst > 7.0 && densitateAmprente < 0.5
     scutEnciclopedic =
@@ -233,7 +213,6 @@ export function ensembleFusion(
     w_s = 0.90
   }
 
-  // Low-signal cap for Romanian: few fingerprints → cap to avoid pure-R inflation
   if (limba === "ro" && amprente <= 1) {
     const cap = Math.max(S * 0.5, 0) + 15
     const raw = Math.round((R_adj * w_r + S * w_s) * 10) / 10
@@ -252,7 +231,6 @@ export function ensembleFusion(
   let scorCombinat = Math.round((R_adj * w_r + S * w_s) * 10) / 10
   scorCombinat = Math.max(0, Math.min(99.4, scorCombinat))
 
-  // Floor only for English where R is genuinely discriminating
   if (limba === "en" && R >= 80) {
     scorCombinat = Math.min(99.4, Math.max(scorCombinat, Math.min(R, 92)))
   }
@@ -268,9 +246,6 @@ export function ensembleFusion(
   }
 }
 
-/**
- * TS-only fallback. probabilitateRobertaBruta defaults to 50 when Python is unavailable.
- */
 export function analizeazaTextComplet(
   text: string,
   probabilitateRobertaBruta = 50.0,

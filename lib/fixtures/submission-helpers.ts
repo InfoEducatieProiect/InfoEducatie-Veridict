@@ -42,8 +42,6 @@ export const BALTAGUL_TEXTS: Record<string, string> = (() => {
 
 export const CLASA_30_ELEVI: Record<string, string> = BALTAGUL_TEXTS
 
-// ── Mock texts for other assignments ──────────────────────────────────────────
-
 const MOCK_TEXT_1 = `Revoluția Industrială reprezintă una dintre cele mai profunde transformări din istoria omenirii. Începând cu Anglia secolului al XVIII-lea, procesul de industrializare a remodelat radical structura socială europeană, ducând la apariția proletariatului urban și a clasei burgheze.
 
 Migrarea masivă de la sat la oraș a creat noi centre de putere economică, dar și zone de sărăcie extremă. Condiţiile de muncă în fabricile textile erau adesea inumane: copii de opt ani lucrau câte doisprezece ore pe zi, fără protecție legală.
@@ -61,8 +59,6 @@ const MOCK_TEXT_BIO_1 = `Fotosinteza este procesul biochimic prin care plantele 
 Ecuația globală: 6CO₂ + 6H₂O + energie luminoasă → C₆H₁₂O₆ + 6O₂
 
 Procesul se desfășoară în reacțiile luminoase (în tilacoidele cloroplastului) și ciclul Calvin (în stroma cloroplastului).`
-
-// ── Seed assignments ──────────────────────────────────────────────────────────
 
 export const SEED_ASSIGNMENTS: Assignment[] = [
   {
@@ -114,15 +110,12 @@ const DB_BALTAGUL_SUBS: StudentSubmission[] = getSubmissionsForAssignment("as_1"
 }))
 
 export const SEED_SUBMISSIONS: StudentSubmission[] = [
-  // 12A — Revoluția Industrială
   { studentName: "Andrei Popescu",   assignmentId: "a1", fileName: "Andrei_RevInd.pdf",   uploadedAt: "12 mai 2026, 09:14", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_1 },
   { studentName: "Maria Ionescu",    assignmentId: "a1", fileName: "Maria_RevInd.docx",   uploadedAt: "12 mai 2026, 11:02", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_2 },
   { studentName: "Vlad Constantin",  assignmentId: "a1", fileName: "Vlad_RevInd.pdf",     uploadedAt: "11 mai 2026, 16:45", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_3 },
   { studentName: "Elena Dumitrescu", assignmentId: "a1", fileName: "Elena_RevInd.pdf",    uploadedAt: "11 mai 2026, 14:30", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_1 },
   { studentName: "Radu Gheorghe",    assignmentId: "a1", fileName: "Radu_RevInd.docx",    uploadedAt: "10 mai 2026, 22:17", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_2 },
-  // 12B — Baltagul (derived from DB_SUBMISSIONS relational join)
   ...DB_BALTAGUL_SUBS,
-  // 10A — Fotosinteza
   { studentName: "Andrei Popescu", assignmentId: "a3", fileName: "Andrei_Fotosinteza.pdf",  uploadedAt: "07 mai 2026, 15:20", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_BIO_1 },
   { studentName: "Maria Ionescu",  assignmentId: "a3", fileName: "Maria_Fotosinteza.docx", uploadedAt: "06 mai 2026, 20:10", aiScore: 0, analysed: false, textPreview: MOCK_TEXT_BIO_1 },
 ]

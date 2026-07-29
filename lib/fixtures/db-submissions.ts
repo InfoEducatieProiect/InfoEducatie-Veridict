@@ -1,14 +1,6 @@
 import type { DbSubmission } from "../types/db-types"
 
-// 29 submissions for "as_1". st_30 (Badea Raluca) and st_31 (Miron Costin) omitted.
-//
-// Flagged clusters (algorithm will naturally score ≥ 50% Jaccard):
-//   CLUSTER A (near-copy):          st_1 ↔ st_5  (Popescu Andrei & Dumitrescu Elena)
-//   CLUSTER B (heavy paraphrase):   st_2 ↔ st_6 ↔ st_15  (Ionescu Maria, Radu Mihai, Nistor George)
-//   CLUSTER C (structural overlap): st_3 ↔ st_9 ↔ st_19  (Vasilescu Dan, Dinu Cristian, Marin Eduard)
-
 export const DB_SUBMISSIONS: DbSubmission[] = [
-  // ── CLUSTER A — near-copy pair ─────────────────────────────────────────────
   {
     id: "sub_1", student_id: "st_1", assignment_id: "as_1", submitted_at: "2026-05-23T14:20:00",
     text: "Romanul Baltagul de Mihail Sadoveanu reprezintă o frescă monumentală a satului arhaic românesc de la munte. Comunitatea din Magura Tarcăului este guvernată de legi nescrise ancestrale, vechi de milenii, unde datina și tradiția stabilesc ordinea cosmică și socială deplină. Viața oierenilor se desfășoară într-un ritm transhumant ciclic, strâns legat de anotimpuri și de mișcarea turmelor de oi pe munte. În acest spațiu izolat și mistic, moartea lui Nechifor Lipan nu reprezintă doar o tragedie personală sau o crimă obișnuită, ci o perturbare gravă a echilibrului universal profund. Vitoria Lipan, personaj mitic și mult mai puternic decât pare, pornește într-o adevărată călătorie inițiatică pentru restabilirea adevărului și aplicarea dreptății absolute, ghidată de semne cosmice și credință nepieritoare în ordinea divină a lucrurilor."
@@ -17,7 +9,6 @@ export const DB_SUBMISSIONS: DbSubmission[] = [
     id: "sub_5", student_id: "st_5", assignment_id: "as_1", submitted_at: "2026-05-24T09:12:00",
     text: "O frescă monumentală a satului arhaic românesc de la munte este reprezentată cu măiestrie în romanul Baltagul de Mihail Sadoveanu. Comunitatea din Magura Tarcăului este guvernată de legi nescrise ancestrale, vechi de milenii, unde datina și tradiția stabilesc ordinea cosmică și socială deplină în viața de zi cu zi. Ritmul transhumant ciclic controlează modul în care viața oierenilor se desfășoară în timp, fiind strâns legat de anotimpuri și de mișcarea turmelor de oi pe munte. În acest spațiu izolat și profund mistic, moartea lui Nechifor Lipan nu este doar o tragedie personală, ci o perturbare gravă a echilibrului universal. Vitoria Lipan, un personaj mitic și extrem de puternic, pornește într-o lungă călătorie inițiatică pentru restabilirea adevărului și aplicarea dreptății absolute, ghidată de semne cosmice și de credință în ordinea divină."
   },
-  // ── CLUSTER B — heavy paraphrase triplet ──────────────────────────────────
   {
     id: "sub_2", student_id: "st_2", assignment_id: "as_1", submitted_at: "2026-05-23T15:10:00",
     text: "Monografia comunității pastorale din Baltagul evidențiază un univers conservator în care timpul pare să fi rămas suspendat pentru totdeauna. Sadoveanu insistă pe legătura organică dintre om și natură, descriind cu precizie de etnograf ritualurile fundamentale ale existenței: botezul, nunta și înmormântarea. Satul românesc de munte este prezentat ca un organism colectiv autoreglabil, reticent la inovațiile tehnologice sau legislative ale lumii moderne de la șes. Personajele refuză instinctiv autoritățile statului, preferând să își rezolve conflictele interne pe baza obiceiului pământului. Mentalitatea arhaică implică o percepție magică asupra realității înconjurătoare, unde visele, vremea și comportamentul animalelor sunt semne clare trimise de divinitate pentru a ghida acțiunile oamenilor din sat."
@@ -30,7 +21,6 @@ export const DB_SUBMISSIONS: DbSubmission[] = [
     id: "sub_15", student_id: "st_15", assignment_id: "as_1", submitted_at: "2026-05-24T15:45:00",
     text: "Mihail Sadoveanu construiește în Baltagul monografia unui univers conservator, în care timpul pare suspendat și legătura organică dintre om și natură este esențială. Ritualurile fundamentale ale existenței — botezul, nunta și înmormântarea — sunt descrise cu acuratețe etnografică remarcabilă. Satul este prezentat ca un organism colectiv autoreglabil, reticent la inovațiile tehnologice sau legislative ale lumii moderne. Localnicii refuză instinctiv autoritățile statului, preferând cu tărie să își rezolve disputele pe baza vechiului obicei al pământului. Mentalitatea pastorală arhaică implică o percepție magică profundă a realității, unde visele și comportamentul animalelor constituie semne divine clare, menite să ghideze pașii oamenilor simpli din munte."
   },
-  // ── CLUSTER C — structural overlap triplet ────────────────────────────────
   {
     id: "sub_3", student_id: "st_3", assignment_id: "as_1", submitted_at: "2026-05-23T16:05:00",
     text: "Perspectiva mitică asupra existenței în opera sadoveană se suprapune peste o structură epică de roman polițist cu elemente arhaice. Căutarea adevărului de către Vitoria Lipan urmează un traseu geografic real prin munți, dar și o axă spirituală internă profundă. Autorul explorează subtil psihologia femeii voluntare, capabilă să preia atributele masculine ale autorității într-o criză gravă. Gheorghiță reprezintă liantul generațional dintre trecut și viitor, fiind educat de mamă în spiritul tradiției pentru a deveni noul cap de familie. Romanul capturează conflictul mocnit dintre modernitate și arhaic, ilustrat prin contrastul dintre hanurile de la drumul mare și gospodăriile izolate din munți."
@@ -43,7 +33,6 @@ export const DB_SUBMISSIONS: DbSubmission[] = [
     id: "sub_19", student_id: "st_19", assignment_id: "as_1", submitted_at: "2026-05-24T17:30:00",
     text: "Opera Baltagul prezintă o perspectivă mitică asupra existenței, suprapusă peste o structură epică de roman polițist cu clare elemente arhaice românești. Căutarea adevărului de Vitoria Lipan urmează un traseu geografic prin munți, dar și o axă spirituală profundă interioară. Autorul explorează psihologia femeii voluntare, care preia atributele masculine ale autorității în criză. Gheorghiță este liantul dintre trecut și viitor, educat de mamă în spiritul tradiției ca să devină capul familiei. Conflictul mocnit dintre modernitate și lumea arhaică este ilustrat prin contrastul dintre hanurile de la drum și gospodăriile izolate din munții Moldovei, unde viața aspră a oierilor își păstrează puritatea originală de milenii."
   },
-  // ── UNIQUE ESSAYS (below 20% similarity between each other) ──────────────
   {
     id: "sub_4", student_id: "st_4", assignment_id: "as_1", submitted_at: "2026-05-23T18:45:00",
     text: "Vitoria Lipan este personajul central al romanului Baltagul, o femeie cu o voință de fier și o credință profundă în ordinea divină și în dreptatea lumii. Plecând de acasă cu fiul ei Gheorghiță, ea traversează munți și sate, interogând oameni și urmărind cu răbdare urmele bărbatului ei dispărut. Ceea ce o distinge de celelalte personaje feminine din literatura română este faptul că ea nu plânge pasiv, ci acționează metodic și inteligent. Identitatea ei este inseparabilă de tradiție și de credința ortodoxă, care îi dau puterea de a înfrunta necunoscutul. Descoperirea crimei și pedepsirea vinovaților reprezintă în final restabilirea echilibrului cosmic perturbat, o victorie a dreptului nescris al muntelui față de lacomia și răutatea umană care au tulburat pacea."
@@ -128,6 +117,4 @@ export const DB_SUBMISSIONS: DbSubmission[] = [
     id: "sub_29", student_id: "st_29", assignment_id: "as_1", submitted_at: "2026-05-24T22:45:00",
     text: "Baltagul rămâne în istoria literaturii române drept cel mai complex roman al lui Mihail Sadoveanu și unul dintre vârfurile absolute ale prozei interbelice. Scriitorul a reușit să integreze organic mai multe registre narative: polițist, mitic, etnografic și liric, creând o operă cu o uimitoare unitate interioară. Tema esențială a romanului poate fi rezumată ca triumful dreptății morale și cosmice asupra crimei și avariciei, exprimat printr-o acțiune epică de o simplitate înșelătoare. Structura romanului, aparent liniară, ascunde o rețea complexă de simboluri, leitmotive și paralelisme care se dezvăluie cititorului atent. Valoarea sa culturală depășește granițele literaturii pure, făcând din Baltagul un document esențial al civilizației tradiționale românești de munte, în toată frumusețea și demnitatea ei ancestrală."
   },
-  // st_30 (Badea Raluca) — NO entry = unsubmitted
-  // st_31 (Miron Costin) — NO entry = unsubmitted
 ]

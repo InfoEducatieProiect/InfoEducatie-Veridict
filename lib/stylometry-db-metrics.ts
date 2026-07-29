@@ -1,8 +1,3 @@
-/**
- * Canonical DB/UI scale for analysis_scores stylometry columns:
- * - ttr, verbs, adjs, punct → percentage 0–100 (spaCy: count/total_words*100)
- * - asl → average sentence length in words (not 0–100 chart scale)
- */
 
 import type { StylometryMetrics } from "@/lib/stylometry-types"
 
@@ -20,7 +15,6 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-/** Normalize a density field to percentage 0–100 for DB/UI. */
 export function coercePercentMetric(value: unknown): number {
   const n = Number(value)
   if (!Number.isFinite(n) || n < 0) return 0
@@ -28,10 +22,6 @@ export function coercePercentMetric(value: unknown): number {
   return round1(Math.min(100, n))
 }
 
-/**
- * Undo legacy AI chart scaling (computeStylometricVector) mistakenly stored in DB.
- * Chart: verbs = min(100, ratio*300) → raw% ≈ chart/3
- */
 export function denormalizeLegacyChartMetric(
   key: DensityKey,
   stored: number,
@@ -45,7 +35,6 @@ export function denormalizeLegacyChartMetric(
   return v
 }
 
-/** Undo legacy normalized 0–100 ASL stored by AI persist; keep spaCy word counts. */
 export function denormalizeLegacyAsl(stored: number): number {
   const n = Number(stored)
   if (!Number.isFinite(n) || n < 0) return 0
@@ -93,7 +82,6 @@ export function parseStylometryMetricsFromDb(row: {
   return mapped
 }
 
-/** Format metrics before writing to analysis_scores (spaCy scale). */
 export function stylometryMetricsToDbColumns(
   metrics: StylometryMetrics,
 ): StylometryDbMetrics {

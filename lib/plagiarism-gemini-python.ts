@@ -7,7 +7,6 @@ import {
   type PlagiarismWebReport,
 } from "./plagiarism-web"
 
-/** Gemini + parallel fetch (10×~7s) — default 90s; override via env if needed. */
 const PYTHON_TIMEOUT_MS = Number(
   process.env.PLAGIARISM_PYTHON_TIMEOUT_MS ?? 90_000,
 )
@@ -39,10 +38,6 @@ function pythonEnv(): NodeJS.ProcessEnv {
   }
 }
 
-/**
- * Runs Gemini web plagiarism scan via Python subprocess.
- * Requires GEMINI_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY) in server env.
- */
 export function runPlagiarismGeminiScan(
   text: string,
   submissionId?: string,

@@ -60,9 +60,7 @@ interface AssignmentDetailProps {
     submissionTexts: Record<string, string>,
     studentIdFromSubmission?: string,
   ) => void
-  /** Clicking "Detalii" only sets the URL; the URL then drives the forensic open. */
   onRequestForensic: (submissionId: string) => void
-  /** ?sub from the URL — auto-opens the forensic view once data has loaded. */
   requestedSubmissionId?: string
   showReport: boolean
   setShowReport: (v: boolean | ((prev: boolean) => boolean)) => void
@@ -144,9 +142,6 @@ export default function AssignmentDetail({
     return () => { cancelled = true }
   }, [assignment.id, setAnalysisReports])
 
-  // Cold deep-link / Back-Forward: when the URL carries ?sub, open the forensic
-  // view for that submission as soon as the report + submissions have loaded.
-  // Reuses the exact data path the "Detalii" button feeds, so no duplication.
   const [autoOpenedSub, setAutoOpenedSub] = useState<string | null>(null)
   useEffect(() => {
     if (!requestedSubmissionId) { setAutoOpenedSub(null); return }
@@ -188,8 +183,6 @@ export default function AssignmentDetail({
     if (assnSubs.length === 0 || isAnalysing || isBulkAnalysing) return
     setIsBulkAnalysing(true)
     try {
-      // /api/analyze-ai now returns the full report (AI + similarity + batched
-      // spaCy stylometry) in one request — no per-student stylometry loop.
       const currentReport = (await runAiAnalysis()) ?? analysisReports[assignment.id] ?? (await loadAnalysisReportForAssignment(assignment.id))
       if (!currentReport) throw new Error("Nu s-a putut genera raportul de analiză")
       setAnalysisReports((prev) => ({ ...prev, [assignment.id]: currentReport }))
@@ -254,7 +247,6 @@ export default function AssignmentDetail({
                 {t("dashboardProfesor.classLabel", { code: assignment.class_code ?? "" })}
               </span>
               {(() => {
-                // Legacy rows without a `type` are treated as homework ("tema").
                 const isTest = assignment.type === "test"
                 const tint = isTest ? "rgba(139,92,246,0.12)" : "rgba(59,130,246,0.1)"
                 const fg = isTest ? "#8b5cf6" : "var(--dash-accent)"

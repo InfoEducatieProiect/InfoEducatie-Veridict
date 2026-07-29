@@ -1,13 +1,8 @@
 export interface StylometricVector {
-  /** Type-Token Ratio ×100 — lexical diversity */
   lexicalDiversity: number
-  /** Normalised average sentence length (clamped to 0-100) */
   avgSentenceLength: number
-  /** Estimated verb density (words ending in Romanian verb suffixes) */
   verbDensity: number
-  /** Estimated adjective density */
   adjectiveDensity: number
-  /** Punctuation marks per 100 words */
   punctuationUsage: number
 }
 
@@ -21,10 +16,6 @@ function endsWith(word: string, suffixes: string[]): boolean {
   return suffixes.some((s) => word.endsWith(s))
 }
 
-/**
- * Raw spaCy-scale percentages for DB storage (NOT 0–100 chart-normalized).
- * Matches scripts/analiza_stilometrie.py semantics.
- */
 export function computeRawStylometricPercentages(text: string): {
   ttr: number
   asl: number
@@ -93,10 +84,6 @@ export function computeStylometricVector(text: string): StylometricVector {
   }
 }
 
-/**
- * Formula: 1/5 × Σ( |V_c - V_h| / max(V_c, V_h) ) × 100
- * Returns a percentage 0-100.
- */
 export function calculateManhattanDeviation(
   current: StylometricVector,
   historic: StylometricVector

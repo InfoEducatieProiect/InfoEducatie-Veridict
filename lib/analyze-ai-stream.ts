@@ -1,13 +1,5 @@
 import type { AnalysisReport } from "@/components/profesor/types"
 
-/**
- * POSTs `/api/analyze-ai` and consumes its NDJSON stream, reporting progress as
- * it arrives. Transport only — callers own the side effects (SWR revalidation,
- * report caching, UI state).
- *
- * Throws on transport failure, on a `{type:"error"}` frame, or if the stream
- * ends without a report.
- */
 export async function runAssignmentAnalysis(
   assignmentId: string,
   onProgress?: (progress: { done: number; total: number }) => void,
@@ -17,13 +9,11 @@ export async function runAssignmentAnalysis(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ assignment_id: assignmentId }),
   })
-  // Validation/auth failures come back as plain JSON (non-2xx, not a stream).
   if (!res.ok || !res.body) {
     const data = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(data.error || res.statusText)
   }
 
-  // Success = NDJSON stream: {type:"progress"|"report"|"error", ...} per line.
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buf = ""

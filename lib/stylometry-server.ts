@@ -19,7 +19,6 @@ export type { StylometryMetrics, StylometryVerdict } from "@/lib/stylometry-type
 export { buildStylometryVerdict } from "@/lib/stylometry-types"
 
 const PYTHON_TIMEOUT_MS = Number(process.env.STYLOMETRY_PYTHON_TIMEOUT_MS ?? 60_000)
-// Batch spawns ONE process for the whole class (model loads once) — allow more headroom.
 const BATCH_TIMEOUT_MS = Number(process.env.STYLOMETRY_BATCH_TIMEOUT_MS ?? 300_000)
 const PYTHON_BIN = process.env.PYTHON_PATH ?? "python"
 
@@ -28,14 +27,10 @@ const METRIC_KEYS = ["ttr", "asl", "verbs", "adjs", "punct"] as const
 type StylometryMetricKey = (typeof METRIC_KEYS)[number]
 
 export interface StylometryAnalysisResult {
-  /** Metricile lucrării curente — salvate în `analysis_scores`. */
   metrics: StylometryMetrics
-  /** Amprenta istorică de referință — citită din `student_baselines`. */
   historic_baseline: StylometryMetrics
-  /** Alias pentru compatibilitate UI (`baseline_used`). */
   baseline_used: StylometryMetrics
   deviation: number
-  /** True dacă nu există încă rând în `student_baselines` (doar citire; fără scriere la analiză). */
   baseline_initialized: boolean
   verdict: StylometryVerdict
   analysis_score_id: string
@@ -76,10 +71,6 @@ function metricsFromRow(
   }
 }
 
-/**
- * Citește amprenta istorică globală — EXCLUSIV din `student_baselines`.
- * Nu folosește `analysis_scores` ca sursă de baseline.
- */
 export async function loadHistoricBaselineFromDb(
   studentId: string,
   supabase: SupabaseClient,
@@ -94,11 +85,6 @@ export async function loadHistoricBaselineFromDb(
   return metricsFromRow(data as StudentBaseline | null)
 }
 
-/**
- * Persistă metricile lucrării curente + deviația în `analysis_scores` pentru acest submission.
- * Plan A: update by analysisScoreId (fast path — always valid after getOrCreateAnalysisRun).
- * Plan B: update directly by submission_id DESC without an extra SELECT (fallback).
- */
 async function persistCurrentWorkToAnalysisScore(
   analysisScoreId: string,
   current: StylometryMetrics,
@@ -228,7 +214,6 @@ function runStylometryPython(
 export interface StylometryBatchItem {
   id: string
   text: string
-  /** Historic baseline from `student_baselines`, or null. */
   baseline: StylometryMetrics | null
 }
 
@@ -238,12 +223,6 @@ export interface StylometryBatchEntry {
   baseline_used: StylometryMetrics
 }
 
-/**
- * Batched spaCy stylometry — ONE Python spawn (one `ro_core_news_sm` load) for
- * the whole class, mirroring `runHybridAiBatch`. Returns a map keyed by item id;
- * items that failed inside Python are simply omitted so the caller can fall back.
- * On a spawn/parse/timeout failure the returned map is empty (caller falls back).
- */
 export async function runStylometryBatch(
   items: StylometryBatchItem[],
 ): Promise<Record<string, StylometryBatchEntry>> {
@@ -335,12 +314,6 @@ export async function runStylometryBatch(
   })
 }
 
-/**
- * Flux corect:
- * 1. Citește baseline din `student_baselines` (read-only; sau null)
- * 2. Python extrage metricile textului curent + deviație față de baseline
- * 3. Scrie metricile curente + `stilometric` în `analysis_scores` (singura scriere)
- */
 export async function runStylometryAnalysis(
   analysisScoreId: string,
   studentId: string,
@@ -356,11 +329,8 @@ export async function runStylometryAnalysis(
 
   const referenceBaseline: StylometryMetrics =
     historicBaseline ?? { ...pythonOut.metrics }
-  // Deviation is always measured against the PREVIOUS baseline (or 0 when none).
-  // For a TEST this is informational; the test then updates the baseline below.
   const deviation = pythonOut.deviation
 
-  // Aici am adăugat submissionId la finalul apelului ca să funcționeze Planul B
   await persistCurrentWorkToAnalysisScore(
     analysisScoreId,
     pythonOut.metrics,
@@ -369,8 +339,6 @@ export async function runStylometryAnalysis(
     submissionId,
   )
 
-  // TEST: recompute the student's baseline as the mean of their analysis_scores
-  // across every TEST assignment (this submission's row was just persisted above).
   if (assignmentType === "test") {
     try {
       const testRunIds = await getTestAssignmentRunIds(supabase)

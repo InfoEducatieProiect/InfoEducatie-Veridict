@@ -4,10 +4,6 @@ import type { SubmissionInput } from "@/lib/analysis-report"
 import { persistAnalysisReport } from "@/lib/analysis-report-persist"
 import { getSubmittedSubmissionsForAssignment } from "@/lib/supabase/queries"
 
-/**
- * @deprecated Prefer POST /api/analyze-ai (hybrid XLM-RoBERTa pipeline).
- * Delegates to the same persist path with submitted-essay filtering.
- */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()

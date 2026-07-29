@@ -19,8 +19,6 @@ import AssignmentDetail from "./profesor/AssignmentDetail"
 import CreateAssignmentModal from "./profesor/CreateAssignmentModal"
 import type { Assignment, AnalysisReport, StudentScore, ClassInfo, SchoolClass } from "./profesor/types"
 
-// ─── Data fetchers ────────────────────────────────────────────────────────────
-
 async function fetchAssignments(professorId: string): Promise<Assignment[]> {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -34,8 +32,6 @@ async function fetchAssignments(professorId: string): Promise<Assignment[]> {
     class_code: (a.classes as { code?: string } | null)?.code,
   })) as Assignment[]
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 interface DashboardProfesorProps {
   userId: string
@@ -55,32 +51,18 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     { revalidateOnFocus: false }
   )
 
-  // ─── URL is the source of truth for navigation ──────────────────────────────
-  // /dashboard/profesor            → Level 1 (assignment list)
-  // ?a=<assignmentId>              → Level 2 (assignment detail)
-  // ?a=…&sub=<submissionId>        → Level 3 (forensic view)
-  // ?a=…&sub=…&tab=<tabId>         → forensic sub-tab
-  //
-  // Parallel branch — the class/student browser (?a always takes precedence):
-  // ?browse=1                      → class cards
-  // ?browse=1&cls=<classId>        → students in that class
-  // ?browse=1&cls=…&stu=<studentId> → that student's submissions
   const aParam = searchParams.get("a")
   const subParam = searchParams.get("sub")
   const tabParam = searchParams.get("tab")
   const browseParam = searchParams.get("browse")
   const clsParam = searchParams.get("cls")
   const stuParam = searchParams.get("stu")
-  // Records that the forensic view was entered from the browser, so its back
-  // button returns there instead of falling through to the assignment table.
   const fromParam = searchParams.get("from")
 
   const selectedAssignment = useMemo(
     () => assignments.find((a) => a.id === aParam) ?? null,
     [assignments, aParam],
   )
-  // While ?a is set but SWR hasn't resolved the assignment yet, show a loader
-  // instead of flashing the list.
   const assignmentPending = !!aParam && !selectedAssignment && assignmentsLoading
   const view: "list" | "detail" | "browse" = selectedAssignment
     ? "detail"
@@ -88,7 +70,6 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
       ? "browse"
       : "list"
 
-  // Rebuild the query string from the current params + patch (null keys dropped).
   const navigate = (
     patch: {
       a?: string | null; sub?: string | null; tab?: string | null
@@ -127,46 +108,31 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
     }))
   }
 
-  // Back/Forward that removes ?sub tears down the forensic (Level 3) view.
   useEffect(() => {
     if (!subParam && forensicData) setForensicData(null)
   }, [subParam, forensicData])
 
-  // Level-2 selection → URL only. AssignmentDetail rebuilds the rich forensic
-  // state from the URL, so both clicks and cold deep-links share one path.
-  // Selecting/leaving an assignment clears the browser params so they don't
-  // leak into an unrelated view.
   const handleSelect = (a: Assignment) =>
     navigate({ a: a.id, sub: null, tab: null, browse: null, cls: null, stu: null, from: null }, "push")
   const handleBack = () =>
     navigate({ a: null, sub: null, tab: null, browse: null, cls: null, stu: null, from: null }, "push")
 
-  // Back out of the forensic view to wherever it was opened from. Restoring
-  // browse=1 with cls/stu still in the URL lands on the student's submissions.
   const handleBackFromForensic = () =>
     fromParam === "browse"
       ? navigate({ a: null, sub: null, tab: null, from: null, browse: "1" }, "push")
       : navigate({ sub: null, tab: null }, "push")
 
-  // ─── Class/student browser ──────────────────────────────────────────────────
   const handleOpenBrowser = () => navigate({ browse: "1", cls: null, stu: null }, "push")
   const handleCloseBrowser = () => navigate({ browse: null, cls: null, stu: null }, "push")
   const handleSelectClass = (classId: string | null) => navigate({ cls: classId, stu: null }, "push")
   const handleSelectStudent = (studentId: string | null) => navigate({ stu: studentId }, "push")
 
-  // Browser → forensic. `cls`/`stu` deliberately stay in the URL (?a takes
-  // precedence in the view derivation) so backing out can restore the exact
-  // submission list; `from` records that origin.
   const handleOpenAnalysisFromBrowser = (assignmentId: string, submissionId: string) =>
     navigate({ a: assignmentId, sub: submissionId, tab: "graph", browse: null, from: "browse" }, "push")
 
-  // Detalii button → set ?sub (+ default tab). The URL drives the actual open.
   const handleRequestForensic = (submissionId: string) =>
     navigate({ sub: submissionId, tab: tabParam ?? "graph" }, "push")
 
-  // Builds the in-memory forensic payload. Invoked by AssignmentDetail's effect
-  // once the report + submissions are loaded and ?sub is present — never pushes
-  // history itself (the URL already reflects the target).
   const handleOpenForensic = (
     studentName: string,
     score: StudentScore,
@@ -258,7 +224,6 @@ export default function DashboardProfesor({ userId, displayName, classes }: Dash
       class_id: classInfo.id,
     }
     let { error } = await supabase.from("assignments").insert({ ...baseRow, type: data.type })
-    // Backward-compat: retry without `type` if the column hasn't been migrated yet.
     if (error && (error.code === "42703" || error.code === "PGRST204")) {
       ;({ error } = await supabase.from("assignments").insert(baseRow))
     }
